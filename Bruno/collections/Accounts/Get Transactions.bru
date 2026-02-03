@@ -1,0 +1,22 @@
+meta {
+  name: Get Transactions
+  type: http
+  seq: 8
+}
+
+get {
+  url: {{baseurl}}/transactions/
+  body: json
+  auth: inherit
+}
+
+body:json {
+  {
+    "file_ids": [1,7]
+  }
+}
+
+settings {
+  encodeUrl: true
+  timeout: 0
+}

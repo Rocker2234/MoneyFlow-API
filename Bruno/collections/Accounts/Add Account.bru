@@ -1,0 +1,30 @@
+meta {
+  name: Add Account
+  type: http
+  seq: 4
+}
+
+post {
+  url: {{baseurl}}/add_account
+  body: json
+  auth: inherit
+}
+
+body:json {
+  {
+    "name": "HDFC",
+    "acc_no": 12345678901,
+    "ifsc_code": "HDFC1234",
+    "acc_type": "Savings",
+    "min_bal": 1000,
+    "dis_bal": 10000,
+    "def_parser": "HDFC_D",
+    "def_grouper": "G_HDFC_X",
+    "user": 2
+  }
+}
+
+settings {
+  encodeUrl: true
+  timeout: 0
+}

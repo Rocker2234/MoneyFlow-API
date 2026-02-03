@@ -1,0 +1,8 @@
+name: Local
+variables:
+  - name: host
+    value: localhost
+  - name: port
+    value: "8000"
+  - name: baseurl
+    value: http://{{host}}:{{port}}/moneyflow

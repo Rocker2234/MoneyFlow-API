@@ -1,0 +1,16 @@
+opencollection: 1.0.0
+info:
+  name: "MoneyFlow API"
+  type: workspace
+
+collections:
+  - name: "Accounts"
+    path: "collections\\Accounts"
+  - name: "Credit"
+    path: "collections\\Credit"
+
+specs:
+
+docs: ''
+
+activeEnvironmentUid: yyw456000000000000000

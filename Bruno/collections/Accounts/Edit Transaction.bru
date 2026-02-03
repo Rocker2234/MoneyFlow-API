@@ -1,0 +1,22 @@
+meta {
+  name: Edit Transaction
+  type: http
+  seq: 6
+}
+
+patch {
+  url: {{baseurl}}/edit/transaction/110
+  body: json
+  auth: inherit
+}
+
+body:json {
+  {
+    "grp_name": ""
+  }
+}
+
+settings {
+  encodeUrl: true
+  timeout: 0
+}

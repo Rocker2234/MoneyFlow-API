@@ -1,0 +1,16 @@
+meta {
+  name: Test Connection
+  type: http
+  seq: 2
+}
+
+get {
+  url: {{baseurl}}/test/
+  body: none
+  auth: inherit
+}
+
+settings {
+  encodeUrl: true
+  timeout: 0
+}
