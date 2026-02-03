@@ -1,6 +1,5 @@
 from rest_framework import serializers
 
-from config.groupers.custom import hdfc_grouper
 from moneyflow.models import Account, Transaction
 
 
@@ -19,12 +18,3 @@ class TransactionSerializer(serializers.ModelSerializer):
                   'cf_amt', 'src_file']
 
     read_only_fields = ['id']
-
-    def validate(self, data: dict) -> dict:
-        if 'grp_name' not in data.keys():
-            print("Assigning Group Name....")
-            data['grp_name'] = hdfc_grouper(data['txn_desc'])
-            print(data)
-            return data
-        else:
-            return data

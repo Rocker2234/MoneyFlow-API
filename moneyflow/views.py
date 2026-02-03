@@ -4,6 +4,8 @@ from datetime import datetime
 from django.db import transaction
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
+from jinja2 import FileSystemLoader
+from jinja2.sandbox import SandboxedEnvironment
 from rest_framework import status
 from rest_framework.decorators import api_view
 from rest_framework.request import Request
@@ -113,12 +115,13 @@ def upload_transaction_file(request: Request) -> Response:
     try:
         reader = get_reader(io.TextIOWrapper(uploaded_file, encoding='utf-8'), parser)
         with transaction.atomic():
+            grouper_env = SandboxedEnvironment(loader=FileSystemLoader('config/templates'))
             for row in reader:
                 txns.append(Transaction(
                     account=acc,
                     txn_date=datetime.strptime(row['txn_date'], dt_format).date().isoformat(),
                     txn_desc=row['txn_desc'],
-                    grp_name=get_group(row['txn_desc'], grouper),
+                    grp_name=get_group(grouper_env, row['txn_desc'], grouper),
                     opr_dt=timezone.make_aware(datetime.strptime(row['opr_dt'], dt_format)),
                     dbt_amount=row['dbt_amount'],
                     cr_amount=row['cr_amount'],
