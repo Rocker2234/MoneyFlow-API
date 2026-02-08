@@ -1,5 +1,5 @@
-{%- elif txn_desc.startswith('UPI') -%}
-    {%- elif txn_desc.startswith('UPI-IRCTC') -%}
+{%- if txn_desc.startswith('UPI') -%}
+    {%- if txn_desc.startswith('UPI-IRCTC') -%}
         UPI-IRCTC
     {%- else -%}
         {%- set hyphen_pos = txn_desc.find("-", 4) -%}

@@ -1,4 +1,3 @@
-import io
 from datetime import datetime
 
 from django.db import transaction
@@ -92,7 +91,7 @@ def upload_transaction_file(request: Request) -> Response:
         dt_format = request.data['dt_format']
         parser = request.data['parser']
         grouper = request.data['grouper']
-        if parser not in SUPPORTED_PARSERS.keys():
+        if (parser not in SUPPORTED_PARSERS.keys()) or parser == "NULL":
             return Response({'error': 'Parser {} is not supported'.format(parser)}, status=status.HTTP_400_BAD_REQUEST)
     except KeyError as e:
         return Response({'error': f"Missing key: {e}"}, status=status.HTTP_400_BAD_REQUEST)
@@ -100,12 +99,11 @@ def upload_transaction_file(request: Request) -> Response:
     uploaded_file = request.FILES.get('file')
     if uploaded_file is None:
         return Response({'error': 'No file provided!'}, status=status.HTTP_400_BAD_REQUEST)
-    file_name = uploaded_file.name
 
     txns = []
 
     audit_log = FileAudit.objects.create(
-        file_name=file_name,
+        file_name=uploaded_file.name,
         to_id=acc.id,
         op_desc='TXN_UPLOAD',
         status='LOADING',
@@ -113,15 +111,19 @@ def upload_transaction_file(request: Request) -> Response:
     )
 
     try:
-        reader = get_reader(io.TextIOWrapper(uploaded_file, encoding='utf-8'), parser)
+        reader = get_reader(uploaded_file, parser)
         with transaction.atomic():
-            grouper_env = SandboxedEnvironment(loader=FileSystemLoader('config/templates'))
+            if grouper:
+                template = SandboxedEnvironment(loader=FileSystemLoader('config/templates')).get_template(
+                    'G_' + grouper + '.j2')
+            else:
+                template = None
             for row in reader:
                 txns.append(Transaction(
                     account=acc,
                     txn_date=datetime.strptime(row['txn_date'], dt_format).date().isoformat(),
                     txn_desc=row['txn_desc'],
-                    grp_name=get_group(grouper_env, row['txn_desc'], grouper),
+                    grp_name=get_group(template, row['txn_desc']),
                     opr_dt=timezone.make_aware(datetime.strptime(row['opr_dt'], dt_format)),
                     dbt_amount=row['dbt_amount'],
                     cr_amount=row['cr_amount'],
@@ -138,7 +140,7 @@ def upload_transaction_file(request: Request) -> Response:
         audit_log.status = 'ERROR'
         audit_log.op_add_txt = str(e)
         audit_log.save()
-        return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        return Response({'error': f"{e.__class__.__name__}: {str(e)}"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
 @api_view(['PATCH'])
