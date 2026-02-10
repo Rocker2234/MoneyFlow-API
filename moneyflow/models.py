@@ -10,7 +10,7 @@ class Account(models.Model):
     acc_no = models.BigIntegerField()
     ifsc_code = models.CharField(max_length=11)
     acc_type = models.CharField(max_length=50, verbose_name="Account Type")
-    # TODO: Add Currency and Symbol Fields
+    currency = models.CharField(max_length=3, verbose_name="Currency")
     min_bal = models.DecimalField(max_digits=16, decimal_places=2, default=0, db_default=0,
                                   validators=[MinValueValidator(Decimal(0.0), message="Minimum Balance cannot be < 0")],
                                   verbose_name="Minimum Balance")
@@ -59,6 +59,7 @@ class FileAudit(models.Model):
     op_add_txt = models.TextField(blank=True, default='', verbose_name="Operation Additional Text")
     updt_dt = models.DateTimeField(auto_now=True, verbose_name="Updated Date")
     isrt_dt = models.DateTimeField(auto_now_add=True, verbose_name="Inserted Date")
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT)
 
     class Meta:
         verbose_name = "File"

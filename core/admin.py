@@ -1,8 +1,17 @@
 from django.contrib import admin
 from django.contrib.auth.admin import UserAdmin as BaseUserAdmin
-from .models import User
+
+from . import models
 
 
-@admin.register(User)
+@admin.register(models.User)
 class UserAdmin(BaseUserAdmin):
-    pass
+    list_display = ('username', 'email', 'home_currency', 'is_staff', 'is_active')
+
+    fieldsets = BaseUserAdmin.fieldsets + (
+        (None, {'fields': ('home_currency',)}),
+    )
+
+    add_fieldsets = BaseUserAdmin.fieldsets + (
+        (None, {'fields': ('home_currency',)}),
+    )

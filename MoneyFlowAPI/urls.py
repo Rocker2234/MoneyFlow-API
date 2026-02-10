@@ -26,4 +26,5 @@ urlpatterns = [
     path(URL_START_DIR + 'admin/', admin.site.urls),
     path(URL_START_DIR, include('moneyflow.urls')),
     path(URL_START_DIR + 'tags/', include('tags.urls')),
+    path(URL_START_DIR + 'user/', include('core.urls')),
 ]

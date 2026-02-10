@@ -9,7 +9,6 @@ urlpatterns = [
     # Account Related Paths
     path('add_account/', views.add_account, name='Add-Account'),
     path('account/<int:acc_id>/', views.account, name='Account'),
-    path('edit/account/<int:acc_id>/', views.edit_account, name='Edit-Account'),
 
     # path('add_transaction/', views.add_transaction, name='Add-Transaction'),
 

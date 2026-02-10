@@ -6,7 +6,7 @@ from moneyflow.models import Account, Transaction
 class AccountSerializer(serializers.ModelSerializer):
     class Meta:
         model = Account
-        fields = ['id', 'name', 'acc_no', 'ifsc_code', 'acc_type', 'min_bal', 'dis_bal', 'def_parser', 'def_grouper', 'act_ind']
+        fields = ['id', 'name', 'acc_no', 'ifsc_code', 'acc_type', 'currency', 'min_bal', 'dis_bal', 'def_parser', 'def_grouper', 'act_ind']
 
     read_only_fields = ['id']
 

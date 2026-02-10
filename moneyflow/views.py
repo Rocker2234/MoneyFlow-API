@@ -8,9 +8,11 @@ from django.utils import timezone
 from jinja2 import FileSystemLoader, TemplateNotFound
 from jinja2.sandbox import SandboxedEnvironment
 from rest_framework import status
-from rest_framework.decorators import api_view
+from rest_framework.decorators import api_view, authentication_classes, permission_classes
+from rest_framework.permissions import IsAuthenticated
 from rest_framework.request import Request
 from rest_framework.response import Response
+from rest_framework_simplejwt.authentication import JWTAuthentication
 
 from .file_actions import get_reader, get_group
 from .models import Account, Transaction, FileAudit
@@ -24,6 +26,8 @@ def check_conn(_request: Request) -> Response:
 
 
 @api_view(['POST'])
+@authentication_classes([JWTAuthentication])
+@permission_classes([IsAuthenticated])
 def add_account(request: Request) -> Response:
     serializer = AccountSerializer(data=request.data)
     serializer.is_valid(raise_exception=True)
@@ -32,8 +36,13 @@ def add_account(request: Request) -> Response:
 
 
 @api_view(['GET', 'PUT', 'DELETE', 'PATCH'])
+@authentication_classes([JWTAuthentication])
+@permission_classes([IsAuthenticated])
 def account(request: Request, acc_id: int) -> Response | None:
     acc = get_object_or_404(Account, pk=acc_id)
+
+    if request.user != acc.user:
+        return Response({"error": "Account does not belong to you!"}, status=status.HTTP_403_FORBIDDEN)
 
     if request.method == 'GET':
         serializer = AccountSerializer(acc)
@@ -65,36 +74,21 @@ def get_parsers(_request: Request) -> Response:
     return Response(SUPPORTED_PARSERS)
 
 
-@api_view(['PATCH'])
-def edit_account(request: Request, acc_id: int) -> Response:
-    txn = get_object_or_404(Transaction, pk=acc_id)
-    allowed_fields = {'def_grouper'}
-    if not set(request.data.keys()).issubset(allowed_fields):
-        return Response({'error': f'Only support {allowed_fields}'}, status=status.HTTP_403_FORBIDDEN)
-
-    serializer = TransactionSerializer(txn, data=request.data, partial=True)
-    serializer.is_valid(raise_exception=True)
-    serializer.save()
-    return Response(serializer.data)
-
-
 @api_view(['POST'])
-def add_transaction(request: Request) -> Response:
-    serializer = TransactionSerializer(data=request.data)
-    serializer.is_valid(raise_exception=True)
-    # serializer.save()
-    return Response(serializer.data, status=status.HTTP_201_CREATED)
-
-
-@api_view(['POST'])
+@authentication_classes([JWTAuthentication])
+@permission_classes([IsAuthenticated])
 def upload_transaction_file(request: Request) -> Response:
     try:
         acc = get_object_or_404(Account, pk=request.data['account'])
+
+        if request.user != acc.user:
+            return Response({"error": "Account does not belong to you!"}, status=status.HTTP_403_FORBIDDEN)
+
         dt_format = request.data['dt_format']
         parser = request.data['parser']
         grouper = request.data['grouper']
         if (parser not in SUPPORTED_PARSERS.keys()) or parser == "NULL":
-            return Response({'error': 'Parser {} is not supported'.format(parser)}, status=status.HTTP_400_BAD_REQUEST)
+            return Response({'error': f'Parser: {parser}, is not supported'}, status=status.HTTP_400_BAD_REQUEST)
     except KeyError as e:
         return Response({'error': f"Missing key: {e}"}, status=status.HTTP_400_BAD_REQUEST)
 
@@ -110,6 +104,7 @@ def upload_transaction_file(request: Request) -> Response:
         op_desc='TXN_UPLOAD',
         status='LOADING',
         op_args=f'Acc:{acc.id}, dt_format:{dt_format}, reader:{parser}, grouper:{grouper}',
+        user=request.user
     )
 
     try:
@@ -153,8 +148,14 @@ def upload_transaction_file(request: Request) -> Response:
 
 
 @api_view(['PATCH'])
+@authentication_classes([JWTAuthentication])
+@permission_classes([IsAuthenticated])
 def edit_transaction(request: Request, txn_id: int) -> Response:
     txn = get_object_or_404(Transaction, pk=txn_id)
+
+    if request.user != txn.account.user:
+        return Response({"error": "Transaction does not belong to you!"}, status=status.HTTP_403_FORBIDDEN)
+
     allowed_fields = {'grp_name'}
     if not set(request.data.keys()).issubset(allowed_fields):
         return Response({'error': f'Only support {allowed_fields}'}, status=status.HTTP_403_FORBIDDEN)
@@ -166,6 +167,8 @@ def edit_transaction(request: Request, txn_id: int) -> Response:
 
 
 @api_view(['PATCH'])
+@authentication_classes([JWTAuthentication])
+@permission_classes([IsAuthenticated])
 def rerun_grouper(request: Request, file_id: int) -> Response:
     try:
         grouper = request.data['grouper']
@@ -181,6 +184,10 @@ def rerun_grouper(request: Request, file_id: int) -> Response:
         return Response({'error': f"{e.__class__.__name__}: {e}"}, status=status.HTTP_400_BAD_REQUEST)
 
     uploaded_file = get_object_or_404(FileAudit, pk=file_id)
+
+    if request.user != uploaded_file.user:
+        return Response({"error": "File does not belong to you!"}, status=status.HTTP_403_FORBIDDEN)
+
     query_set = Transaction.objects.filter(src_file=uploaded_file)
 
     if blanks_only:
@@ -214,18 +221,28 @@ def rerun_grouper(request: Request, file_id: int) -> Response:
 
 
 @api_view(['GET'])
+@authentication_classes([JWTAuthentication])
+@permission_classes([IsAuthenticated])
 def get_transactions(request: Request) -> Response:
     try:
         file_ids = request.data['file_ids']
     except KeyError as e:
         return Response({'error': f"Missing key: {e}"}, status=status.HTTP_400_BAD_REQUEST)
-    queryset = Transaction.objects.filter(src_file_id__in=file_ids)
+
+    queryset = Transaction.objects.filter(src_file_id__in=file_ids, src_file__user=request.user,
+                                          src_file__op_desc='TXN_UPLOAD').select_related('src_file')
     serializer = TransactionSerializer(queryset, many=True)
     return Response(serializer.data)
 
 
 @api_view(['DELETE'])
-def delete_uploaded_file(_request: Request, file_id: int) -> Response:
+@authentication_classes([JWTAuthentication])
+@permission_classes([IsAuthenticated])
+def delete_uploaded_file(request: Request, file_id: int) -> Response:
     audit_file = get_object_or_404(FileAudit, pk=file_id)
+
+    if request.user != audit_file.user:
+        return Response({"error": "Account does not belong to you!"}, status=status.HTTP_403_FORBIDDEN)
+
     audit_file.delete()
     return Response(status=status.HTTP_204_NO_CONTENT)

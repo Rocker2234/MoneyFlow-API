@@ -8,6 +8,8 @@ django = "*"
 djangorestframework = "*"
 jinja2 = "*"
 xlrd = "*"
+djangorestframework-stubs = "*"
+djangorestframework-simplejwt = "*"
 
 [dev-packages]
 
