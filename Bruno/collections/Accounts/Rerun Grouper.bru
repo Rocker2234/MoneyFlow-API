@@ -1,18 +1,19 @@
 meta {
-  name: Get Transactions
+  name: Rerun Grouper
   type: http
-  seq: 9
+  seq: 10
 }
 
-get {
-  url: {{baseurl}}/transactions/
+patch {
+  url: {{baseurl}}/regroup/19
   body: json
   auth: inherit
 }
 
 body:json {
   {
-    "file_ids": [1,7]
+    "grouper": "HDFC",
+    "blanks_only": false
   }
 }
 

@@ -1,7 +1,7 @@
 from decimal import Decimal
 
-from django.core.validators import MinValueValidator
 from django.conf import settings
+from django.core.validators import MinValueValidator
 from django.db import models
 
 
@@ -10,6 +10,7 @@ class Account(models.Model):
     acc_no = models.BigIntegerField()
     ifsc_code = models.CharField(max_length=11)
     acc_type = models.CharField(max_length=50, verbose_name="Account Type")
+    # TODO: Add Currency and Symbol Fields
     min_bal = models.DecimalField(max_digits=16, decimal_places=2, default=0, db_default=0,
                                   validators=[MinValueValidator(Decimal(0.0), message="Minimum Balance cannot be < 0")],
                                   verbose_name="Minimum Balance")

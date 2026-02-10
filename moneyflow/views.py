@@ -1,9 +1,11 @@
 from datetime import datetime
 
+from django.conf import settings
 from django.db import transaction
 from django.shortcuts import get_object_or_404
+from django.template import TemplateDoesNotExist
 from django.utils import timezone
-from jinja2 import FileSystemLoader
+from jinja2 import FileSystemLoader, TemplateNotFound
 from jinja2.sandbox import SandboxedEnvironment
 from rest_framework import status
 from rest_framework.decorators import api_view
@@ -113,11 +115,11 @@ def upload_transaction_file(request: Request) -> Response:
     try:
         reader = get_reader(uploaded_file, parser)
         with transaction.atomic():
-            if grouper:
-                template = SandboxedEnvironment(loader=FileSystemLoader('config/templates')).get_template(
-                    'G_' + grouper + '.j2')
-            else:
-                template = None
+            template = None
+            if grouper not in (None, "", "NULL"):
+                template = SandboxedEnvironment(
+                    loader=FileSystemLoader(settings.USER_SETTINGS.get("Main", "templates"))).get_template(
+                        'G_' + grouper + '.j2')
             for row in reader:
                 txns.append(Transaction(
                     account=acc,
@@ -132,15 +134,22 @@ def upload_transaction_file(request: Request) -> Response:
                     src_file=audit_log
                 ))
             Transaction.objects.bulk_create(txns)
-
             audit_log.status = 'LOADED'
             audit_log.save()
-        return Response({'file': str(audit_log)}, status=status.HTTP_201_CREATED)
+        return Response({
+            'file': audit_log.file_name,
+            'id': audit_log.id,
+        }, status=status.HTTP_201_CREATED)
+    except TemplateDoesNotExist as e:
+        audit_log.status = 'FAILED'
+        audit_log.op_add_txt = f"{e.__class__.__name__}: {e}"
+        audit_log.save()
+        return Response({'error': f"{e.__class__.__name__}: {e}"}, status=status.HTTP_400_BAD_REQUEST)
     except Exception as e:
         audit_log.status = 'ERROR'
         audit_log.op_add_txt = str(e)
         audit_log.save()
-        return Response({'error': f"{e.__class__.__name__}: {str(e)}"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        return Response({'error': f"{e.__class__.__name__}: {e}"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
 @api_view(['PATCH'])
@@ -154,6 +163,54 @@ def edit_transaction(request: Request, txn_id: int) -> Response:
     serializer.is_valid(raise_exception=True)
     serializer.save()
     return Response(serializer.data)
+
+
+@api_view(['PATCH'])
+def rerun_grouper(request: Request, file_id: int) -> Response:
+    try:
+        grouper = request.data['grouper']
+        blanks_only = request.data['blanks_only']
+        template = None
+        if grouper not in (None, "", "NULL"):
+            template = SandboxedEnvironment(
+                loader=FileSystemLoader(settings.USER_SETTINGS.get("Main", "templates"))).get_template(
+                'G_' + grouper + '.j2')
+    except KeyError as e:
+        return Response({'error': f"Missing key: {e}"}, status=status.HTTP_400_BAD_REQUEST)
+    except TemplateNotFound as e:
+        return Response({'error': f"{e.__class__.__name__}: {e}"}, status=status.HTTP_400_BAD_REQUEST)
+
+    uploaded_file = get_object_or_404(FileAudit, pk=file_id)
+    query_set = Transaction.objects.filter(src_file=uploaded_file)
+
+    if blanks_only:
+        query_set = query_set.filter(grp_name='')
+
+    try:
+        with transaction.atomic():
+            txns = query_set.iterator(chunk_size=100)
+            updated_txns = 0
+            while True:
+                batch = []
+                try:
+                    for _ in range(100):
+                        txn = next(txns)
+                        new_group = get_group(template, txn.txn_desc)
+                        if new_group != txn.grp_name:
+                            txn.grp_name = new_group
+                            batch.append(txn)
+                except StopIteration:
+                    if batch:
+                        updated_txns += Transaction.objects.bulk_update(batch, ['grp_name'])
+                    break
+                if batch:
+                    updated_txns += Transaction.objects.bulk_update(batch, ['grp_name'])
+            if updated_txns > 0:
+                uploaded_file.op_add_txt = f"Regroup: {grouper}"
+                uploaded_file.save()
+        return Response({'updated_txns': updated_txns})
+    except Exception as e:
+        return Response({'error': f"{e.__class__.__name__}: {e}"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
 @api_view(['GET'])

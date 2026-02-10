@@ -12,6 +12,21 @@ https://docs.djangoproject.com/en/5.2/ref/settings/
 
 from pathlib import Path
 
+from . import USER_SETTINGS, db_engine_mapping
+
+db_config = {
+    'ENGINE': db_engine_mapping[USER_SETTINGS.get('DB', 'engine')],
+    'NAME': USER_SETTINGS.get('DB', 'name'),
+}
+
+if USER_SETTINGS.get('DB', 'engine') != 'sqlite':
+    db_config.update({
+        'USER': USER_SETTINGS.get('DB', 'user'),
+        'PASSWORD': USER_SETTINGS.get('DB', 'password'),
+        'HOST': USER_SETTINGS.get('DB', 'host'),
+        'PORT': USER_SETTINGS.get('DB', 'port'),
+    })
+
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 
@@ -79,10 +94,7 @@ WSGI_APPLICATION = 'MoneyFlowAPI.wsgi.application'
 # https://docs.djangoproject.com/en/5.2/ref/settings/#databases
 
 DATABASES = {
-    'default': {
-        'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': BASE_DIR / 'db.sqlite3',
-    }
+    'default': db_config
 }
 
 
