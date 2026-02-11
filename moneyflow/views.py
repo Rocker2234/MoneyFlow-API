@@ -1,12 +1,8 @@
 from datetime import datetime
 
-from django.conf import settings
 from django.db import transaction
 from django.shortcuts import get_object_or_404
-from django.template import TemplateDoesNotExist
 from django.utils import timezone
-from jinja2 import FileSystemLoader, TemplateNotFound
-from jinja2.sandbox import SandboxedEnvironment
 from rest_framework import status
 from rest_framework.decorators import api_view, authentication_classes, permission_classes
 from rest_framework.permissions import IsAuthenticated
@@ -17,7 +13,7 @@ from rest_framework_simplejwt.authentication import JWTAuthentication
 from .file_actions import get_reader, get_group
 from .models import Account, Transaction, FileAudit
 from .parsers import SUPPORTED_PARSERS
-from .serializers import AccountSerializer, TransactionSerializer
+from .serializers import AccountSerializer, TransactionSerializer, RerunGroupSerializer, TransactionFileUploadSerializer
 
 
 @api_view()
@@ -78,19 +74,12 @@ def get_parsers(_request: Request) -> Response:
 @authentication_classes([JWTAuthentication])
 @permission_classes([IsAuthenticated])
 def upload_transaction_file(request: Request) -> Response:
-    try:
-        acc = get_object_or_404(Account, pk=request.data['account'])
+    serializer = TransactionFileUploadSerializer(data=request.data, context={'request': request})
+    serializer.is_valid(raise_exception=True)
 
-        if request.user != acc.user:
-            return Response({"error": "Account does not belong to you!"}, status=status.HTTP_403_FORBIDDEN)
-
-        dt_format = request.data['dt_format']
-        parser = request.data['parser']
-        grouper = request.data['grouper']
-        if (parser not in SUPPORTED_PARSERS.keys()) or parser == "NULL":
-            return Response({'error': f'Parser: {parser}, is not supported'}, status=status.HTTP_400_BAD_REQUEST)
-    except KeyError as e:
-        return Response({'error': f"Missing key: {e}"}, status=status.HTTP_400_BAD_REQUEST)
+    acc = serializer.validated_data['account']
+    dt_format = serializer.validated_data['dt_format']
+    parser = serializer.validated_data['parser']
 
     uploaded_file = request.FILES.get('file')
     if uploaded_file is None:
@@ -103,24 +92,19 @@ def upload_transaction_file(request: Request) -> Response:
         to_id=acc.id,
         op_desc='TXN_UPLOAD',
         status='LOADING',
-        op_args=f'Acc:{acc.id}, dt_format:{dt_format}, reader:{parser}, grouper:{grouper}',
+        op_args=f'Acc:{acc.id}, dt_format:{dt_format}, reader:{parser}, grouper:{request.data["grouper"]}',
         user=request.user
     )
 
     try:
         reader = get_reader(uploaded_file, parser)
         with transaction.atomic():
-            template = None
-            if grouper not in (None, "", "NULL"):
-                template = SandboxedEnvironment(
-                    loader=FileSystemLoader(settings.USER_SETTINGS.get("Main", "templates"))).get_template(
-                        'G_' + grouper + '.j2')
             for row in reader:
                 txns.append(Transaction(
                     account=acc,
                     txn_date=datetime.strptime(row['txn_date'], dt_format).date().isoformat(),
                     txn_desc=row['txn_desc'],
-                    grp_name=get_group(template, row['txn_desc']),
+                    grp_name=get_group(serializer.validated_data['grouper'], row['txn_desc']),
                     opr_dt=timezone.make_aware(datetime.strptime(row['opr_dt'], dt_format)),
                     dbt_amount=row['dbt_amount'],
                     cr_amount=row['cr_amount'],
@@ -135,11 +119,6 @@ def upload_transaction_file(request: Request) -> Response:
             'file': audit_log.file_name,
             'id': audit_log.id,
         }, status=status.HTTP_201_CREATED)
-    except TemplateDoesNotExist as e:
-        audit_log.status = 'FAILED'
-        audit_log.op_add_txt = f"{e.__class__.__name__}: {e}"
-        audit_log.save()
-        return Response({'error': f"{e.__class__.__name__}: {e}"}, status=status.HTTP_400_BAD_REQUEST)
     except Exception as e:
         audit_log.status = 'ERROR'
         audit_log.op_add_txt = str(e)
@@ -170,27 +149,14 @@ def edit_transaction(request: Request, txn_id: int) -> Response:
 @authentication_classes([JWTAuthentication])
 @permission_classes([IsAuthenticated])
 def rerun_grouper(request: Request, file_id: int) -> Response:
-    try:
-        grouper = request.data['grouper']
-        blanks_only = request.data['blanks_only']
-        template = None
-        if grouper not in (None, "", "NULL"):
-            template = SandboxedEnvironment(
-                loader=FileSystemLoader(settings.USER_SETTINGS.get("Main", "templates"))).get_template(
-                'G_' + grouper + '.j2')
-    except KeyError as e:
-        return Response({'error': f"Missing key: {e}"}, status=status.HTTP_400_BAD_REQUEST)
-    except TemplateNotFound as e:
-        return Response({'error': f"{e.__class__.__name__}: {e}"}, status=status.HTTP_400_BAD_REQUEST)
+    audit_file = get_object_or_404(FileAudit, pk=file_id)
 
-    uploaded_file = get_object_or_404(FileAudit, pk=file_id)
+    serializer = RerunGroupSerializer(data=request.data, context={'request': request, 'file': audit_file})
+    serializer.is_valid(raise_exception=True)
 
-    if request.user != uploaded_file.user:
-        return Response({"error": "File does not belong to you!"}, status=status.HTTP_403_FORBIDDEN)
+    query_set = Transaction.objects.filter(src_file=audit_file)
 
-    query_set = Transaction.objects.filter(src_file=uploaded_file)
-
-    if blanks_only:
+    if serializer.validated_data['blanks_only']:
         query_set = query_set.filter(grp_name='')
 
     try:
@@ -202,7 +168,7 @@ def rerun_grouper(request: Request, file_id: int) -> Response:
                 try:
                     for _ in range(100):
                         txn = next(txns)
-                        new_group = get_group(template, txn.txn_desc)
+                        new_group = get_group(serializer.validated_data['grouper'], txn.txn_desc)
                         if new_group != txn.grp_name:
                             txn.grp_name = new_group
                             batch.append(txn)
@@ -213,8 +179,8 @@ def rerun_grouper(request: Request, file_id: int) -> Response:
                 if batch:
                     updated_txns += Transaction.objects.bulk_update(batch, ['grp_name'])
             if updated_txns > 0:
-                uploaded_file.op_add_txt = f"Regroup: {grouper}"
-                uploaded_file.save()
+                audit_file.op_add_txt = f"Regroup: {request.data['grouper']}"
+                audit_file.save()
         return Response({'updated_txns': updated_txns})
     except Exception as e:
         return Response({'error': f"{e.__class__.__name__}: {e}"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
@@ -239,7 +205,7 @@ def get_transactions(request: Request) -> Response:
 @authentication_classes([JWTAuthentication])
 @permission_classes([IsAuthenticated])
 def delete_uploaded_file(request: Request, file_id: int) -> Response:
-    audit_file = get_object_or_404(FileAudit, pk=file_id)
+    audit_file = get_object_or_404(FileAudit, pk=file_id, status='LOADED')
 
     if request.user != audit_file.user:
         return Response({"error": "Account does not belong to you!"}, status=status.HTTP_403_FORBIDDEN)
