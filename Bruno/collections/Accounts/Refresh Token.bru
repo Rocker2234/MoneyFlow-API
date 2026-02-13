@@ -1,34 +1,28 @@
 meta {
-  name: Login
+  name: Refresh Token
   type: http
-  seq: 4
+  seq: 6
 }
 
 post {
-  url: {{baseurl}}/user/login/
+  url: {{baseurl}}/user/token/refresh/
   body: json
   auth: none
 }
 
 body:json {
   {
-    "username":"rocker",
-    "password":"qwert1234a"
+    "refresh": "{{jwt_refresh}}"
   }
-  // {
-  //   "username":"thundra",
-  //   "password":"qwert1234a"
-  // }
 }
 
 script:post-response {
   if (res.getStatus() === 200) {
     const data = res.getBody();
     
-    // Save the access token to your environment variable
+  
     if (data.access) {
       bru.setEnvVar("jwt_access", data.access);
-      bru.setEnvVar("jwt_refresh", data.refresh);
       console.log("Access token updated successfully!");
     }
   }

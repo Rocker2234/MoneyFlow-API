@@ -4,16 +4,14 @@ from django.db import transaction
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
 from rest_framework import status
-from rest_framework.decorators import api_view, authentication_classes, permission_classes
-from rest_framework.permissions import IsAuthenticated
+from rest_framework.decorators import api_view, permission_classes
+from rest_framework.permissions import AllowAny
 from rest_framework.request import Request
 from rest_framework.response import Response
-from rest_framework_simplejwt.authentication import JWTAuthentication
 
 from .file_actions import get_reader, get_group
-from .models import Account, Transaction, FileAudit
-from .parsers import SUPPORTED_PARSERS
-from .serializers import AccountSerializer, TransactionSerializer, RerunGroupSerializer, TransactionFileUploadSerializer
+from .models import FileAudit
+from .serializers import *
 
 
 @api_view()
@@ -22,8 +20,6 @@ def check_conn(_request: Request) -> Response:
 
 
 @api_view(['POST'])
-@authentication_classes([JWTAuthentication])
-@permission_classes([IsAuthenticated])
 def add_account(request: Request) -> Response:
     serializer = AccountSerializer(data=request.data)
     serializer.is_valid(raise_exception=True)
@@ -32,8 +28,6 @@ def add_account(request: Request) -> Response:
 
 
 @api_view(['GET', 'PUT', 'DELETE', 'PATCH'])
-@authentication_classes([JWTAuthentication])
-@permission_classes([IsAuthenticated])
 def account(request: Request, acc_id: int) -> Response | None:
     acc = get_object_or_404(Account, pk=acc_id)
 
@@ -66,13 +60,12 @@ def account(request: Request, acc_id: int) -> Response | None:
 
 
 @api_view(['GET'])
+@permission_classes([AllowAny])
 def get_parsers(_request: Request) -> Response:
     return Response(SUPPORTED_PARSERS)
 
 
 @api_view(['POST'])
-@authentication_classes([JWTAuthentication])
-@permission_classes([IsAuthenticated])
 def upload_transaction_file(request: Request) -> Response:
     serializer = TransactionFileUploadSerializer(data=request.data, context={'request': request})
     serializer.is_valid(raise_exception=True)
@@ -127,8 +120,6 @@ def upload_transaction_file(request: Request) -> Response:
 
 
 @api_view(['PATCH'])
-@authentication_classes([JWTAuthentication])
-@permission_classes([IsAuthenticated])
 def edit_transaction(request: Request, txn_id: int) -> Response:
     txn = get_object_or_404(Transaction, pk=txn_id)
 
@@ -146,8 +137,6 @@ def edit_transaction(request: Request, txn_id: int) -> Response:
 
 
 @api_view(['PATCH'])
-@authentication_classes([JWTAuthentication])
-@permission_classes([IsAuthenticated])
 def rerun_grouper(request: Request, file_id: int) -> Response:
     audit_file = get_object_or_404(FileAudit, pk=file_id)
 
@@ -187,9 +176,7 @@ def rerun_grouper(request: Request, file_id: int) -> Response:
 
 
 @api_view(['GET'])
-@authentication_classes([JWTAuthentication])
-@permission_classes([IsAuthenticated])
-def get_transactions(request: Request) -> Response:
+def get_transactions_by_file(request: Request) -> Response:
     try:
         file_ids = request.data['file_ids']
     except KeyError as e:
@@ -201,9 +188,25 @@ def get_transactions(request: Request) -> Response:
     return Response(serializer.data)
 
 
+@api_view(['GET'])
+def get_transactions_filtered(request: Request) -> Response:
+    serializer = TransactionByDateSerializer(data=request.data)
+    serializer.is_valid(raise_exception=True)
+
+    queryset = Transaction.objects.filter(
+        src_file__user=request.user,
+        txn_date__gte=serializer.validated_data['from_date'],
+        txn_date__lte=serializer.validated_data['to_date'],
+    ).select_related('src_file')
+
+    if serializer.validated_data['txn_desc']:
+        queryset = queryset.filter(txn_desc__contains=serializer.validated_data['txn_desc'])
+
+    txns = TransactionSerializer(queryset, many=True)
+    return Response(txns.data)
+
+
 @api_view(['DELETE'])
-@authentication_classes([JWTAuthentication])
-@permission_classes([IsAuthenticated])
 def delete_uploaded_file(request: Request, file_id: int) -> Response:
     audit_file = get_object_or_404(FileAudit, pk=file_id, status='LOADED')
 

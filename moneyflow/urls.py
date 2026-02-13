@@ -18,5 +18,6 @@ urlpatterns = [
     path('regroup/<int:file_id>', views.rerun_grouper, name='Rerun-Grouper'),
     path('edit/transaction/<int:txn_id>/', views.edit_transaction, name='Edit-Transaction'),
     path('delete/<int:file_id>/', views.delete_uploaded_file, name='Delete-Transaction-File'),
-    path('transactions/', views.get_transactions, name='Get-Transaction-For-File'),
+    path('transactions/by_files', views.get_transactions_by_file, name='Get-Transaction-For-Files'),
+    path('transactions/filter', views.get_transactions_filtered, name='Get-Transaction-For-Date '),
 ]

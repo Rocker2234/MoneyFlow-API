@@ -5,8 +5,8 @@ from jinja2.sandbox import SandboxedEnvironment
 from rest_framework import serializers
 from rest_framework.exceptions import PermissionDenied
 
-from moneyflow.models import Account, Transaction
-from moneyflow.parsers import SUPPORTED_PARSERS
+from .models import Account, Transaction
+from .parsers import SUPPORTED_PARSERS
 
 
 class AccountSerializer(serializers.ModelSerializer):
@@ -88,4 +88,16 @@ class RerunGroupSerializer(serializers.Serializer):
     def validate(self, attrs):
         if self.context['request'].user != self.context['file'].user:
             raise PermissionDenied("File does not belong to you")
+        return attrs
+
+
+class TransactionByDateSerializer(serializers.Serializer):
+    from_date = serializers.DateField()
+    to_date = serializers.DateField()
+    txn_desc = serializers.CharField(max_length=1024, default='')
+
+    def validate(self, attrs):
+        if attrs["from_date"] > attrs["to_date"]:
+            raise serializers.ValidationError("From Date must be before To Date")
+
         return attrs
