@@ -9,6 +9,12 @@ from rest_framework_simplejwt.tokens import RefreshToken
 from .serializers import UserSerializer
 
 
+@api_view()
+@permission_classes([AllowAny])
+def check_conn(_request: Request) -> Response:
+    return Response("OK")
+
+
 @api_view(['POST'])
 @permission_classes([AllowAny])
 def register_user(request: Request) -> Response:

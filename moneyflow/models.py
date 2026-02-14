@@ -23,7 +23,7 @@ class Account(models.Model):
     isrt_dt = models.DateTimeField(auto_now_add=True)
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT)
 
-    models.UniqueConstraint(fields=['acc_no', 'ifsc_code'], name='Unique Account')
+    models.UniqueConstraint(fields=['acc_no', 'ifsc_code', 'user'], name='Unique Account')
 
     class Meta:
         ordering = ('name', 'acc_no',)
@@ -36,11 +36,13 @@ class CreditCard(models.Model):
     name = models.CharField(max_length=255)
     card_no = models.BigIntegerField()
     exp_date = models.DateField(verbose_name="Expiry Date")
+    def_parser = models.CharField(max_length=20, blank=True, default='', verbose_name="Default Parser")
+    def_grouper = models.CharField(max_length=40, blank=True, default='', verbose_name="Default Grouper")
     act_ind = models.BooleanField(default=True)
     isrt_dt = models.DateTimeField(auto_now_add=True, verbose_name="Inserted Date")
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT)
 
-    models.UniqueConstraint(fields=['card_no', 'name'], name='Unique Credit Card')
+    models.UniqueConstraint(fields=['card_no', 'name', 'user'], name='Unique Credit Card')
 
     class Meta:
         verbose_name = "Credit Card"
@@ -71,7 +73,7 @@ class FileAudit(models.Model):
 
 class Transaction(models.Model):
     account = models.ForeignKey(Account, on_delete=models.CASCADE, related_name='transactions')
-    txn_date = models.DateField(verbose_name="Transaction Date")
+    txn_date = models.DateTimeField(verbose_name="Transaction Date")
     txn_desc = models.CharField(max_length=1024, verbose_name="Transaction Description")
     grp_name = models.CharField(max_length=1024, blank=True, default='', verbose_name="Group Name")
     opr_dt = models.DateTimeField(verbose_name="Operation Date")
@@ -94,7 +96,7 @@ class Transaction(models.Model):
 
 class CreditTransaction(models.Model):
     credit_card = models.ForeignKey(CreditCard, on_delete=models.CASCADE, related_name='credit_transactions')
-    txn_date = models.DateField(verbose_name="Transaction Date")
+    txn_date = models.DateTimeField(verbose_name="Transaction Date")
     txn_desc = models.CharField(max_length=1024, verbose_name="Transaction Description")
     grp_name = models.CharField(max_length=1024, blank=True, default='', verbose_name="Group Name")
     amt = models.DecimalField(max_digits=16, decimal_places=2, verbose_name='Amount')

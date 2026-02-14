@@ -1,0 +1,38 @@
+meta {
+  name: Register
+  type: http
+  seq: 3
+}
+
+post {
+  url: {{baseurl}}/register/
+  body: json
+  auth: none
+}
+
+body:json {
+  {
+    "username": "rocker",
+    "password": "1234",
+    "home_currency": "INR"
+  }
+  // {
+  //   "username":"thundra",
+  //   "password":"1234",
+  //   "home_currency": "INR"
+  // }
+}
+
+script:post-response {
+  if (res.getStatus() === 200) {
+    const data = res.getBody();
+    bru.setGlobalEnvVar("jwt_access", data.access);
+    bru.setGlobalEnvVar("jwt_refresh", data.refresh);
+    console.log("Access token updated successfully!");
+  }
+}
+
+settings {
+  encodeUrl: true
+  timeout: 0
+}

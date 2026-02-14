@@ -9,6 +9,7 @@ from .parsers import HDFC, ICICI
 
 PARSER_MAPPING = {
     'HDFC_D': HDFC.parse_delimited,
+    "HDFC_CC_CSV": HDFC.parse_cc_csv,
     "ICICI_XLS": ICICI.parse_xls
 }
 

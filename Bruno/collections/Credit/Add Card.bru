@@ -1,0 +1,26 @@
+meta {
+  name: Add Card
+  type: http
+  seq: 3
+}
+
+post {
+  url: {{collection_url}}/add/
+  body: json
+  auth: inherit
+}
+
+body:json {
+  {
+    "name": "HDFC Millennia",
+    "card_no": 1234567890123456,
+    "exp_date": "2028-01-01",
+    "def_parser": "HDFC_CC_CSV",
+    "def_grouper": ""
+  }
+}
+
+settings {
+  encodeUrl: true
+  timeout: 0
+}

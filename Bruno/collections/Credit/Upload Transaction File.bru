@@ -11,11 +11,11 @@ post {
 }
 
 body:multipart-form {
-  account: 1
-  dt_format: %d/%m/%y
-  parser: HDFC_D
-  grouper: HDFC
-  file: @file(E:\Softwares\PyCharm\MoneyFlowAPI\moneyflow\parsers\Examples\HDFC_D.txt)
+  credit_card: 1
+  dt_format: %d/%m/%Y %H:%M:%S
+  parser: HDFC_CC_CSV
+  file: @file(E:\Softwares\PyCharm\MoneyFlowAPI\moneyflow\parsers\Examples\HDFC_CC.csv)
+  ~grouper: 
 }
 
 settings {

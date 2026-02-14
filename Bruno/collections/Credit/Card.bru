@@ -1,13 +1,13 @@
 meta {
-  name: Get Parsers
+  name: Card
   type: http
   seq: 4
 }
 
 get {
-  url: {{collection_url}}/parsers/
-  body: none
-  auth: none
+  url: {{collection_url}}/1/
+  body: json
+  auth: inherit
 }
 
 settings {

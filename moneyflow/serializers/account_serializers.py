@@ -1,3 +1,5 @@
+from zoneinfo import ZoneInfo
+
 from django.conf import settings
 from jinja2 import FileSystemLoader
 from jinja2.exceptions import TemplateNotFound
@@ -5,8 +7,8 @@ from jinja2.sandbox import SandboxedEnvironment
 from rest_framework import serializers
 from rest_framework.exceptions import PermissionDenied
 
-from .models import Account, Transaction
-from .parsers import SUPPORTED_PARSERS
+from ..models import Account, Transaction
+from ..parsers import SUPPORTED_PARSERS
 
 
 class AccountSerializer(serializers.ModelSerializer):
@@ -25,6 +27,16 @@ class TransactionSerializer(serializers.ModelSerializer):
                   'cf_amt', 'src_file']
 
     read_only_fields = ['id']
+
+    def to_representation(self, instance):
+        representation = super().to_representation(instance)
+
+        local_txn_dt = instance.txn_date.astimezone(ZoneInfo(settings.USER_SETTINGS.get("Main", "home_tz")))
+        local_opr_dt = instance.opr_dt.astimezone(ZoneInfo(settings.USER_SETTINGS.get("Main", "home_tz")))
+        representation['txn_date'] = local_txn_dt.isoformat()
+        representation['opr_dt'] = local_opr_dt.isoformat()
+
+        return representation
 
 
 class TransactionFileUploadSerializer(serializers.Serializer):
@@ -63,7 +75,6 @@ class TransactionFileUploadSerializer(serializers.Serializer):
             raise serializers.ValidationError("File is required!")
 
         allowed_mime_types = ["text/plain", "application/vnd.ms-excel"]
-        print(value, value.content_type, (value.content_type not in allowed_mime_types))
         if value.content_type not in allowed_mime_types:
             raise serializers.ValidationError("Invalid File")
 

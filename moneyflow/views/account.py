@@ -4,19 +4,13 @@ from django.db import transaction
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
 from rest_framework import status
-from rest_framework.decorators import api_view, permission_classes
-from rest_framework.permissions import AllowAny
+from rest_framework.decorators import api_view
 from rest_framework.request import Request
 from rest_framework.response import Response
 
-from .file_actions import get_reader, get_group
-from .models import FileAudit
-from .serializers import *
-
-
-@api_view()
-def check_conn(_request: Request) -> Response:
-    return Response("OK")
+from ..file_actions import get_reader, get_group
+from ..models import FileAudit
+from ..serializers.account_serializers import *
 
 
 @api_view(['POST'])
@@ -28,7 +22,7 @@ def add_account(request: Request) -> Response:
 
 
 @api_view(['GET', 'PUT', 'DELETE', 'PATCH'])
-def account(request: Request, acc_id: int) -> Response | None:
+def account(request: Request, acc_id: int) -> Response:
     acc = get_object_or_404(Account, pk=acc_id)
 
     if request.user != acc.user:
@@ -56,13 +50,7 @@ def account(request: Request, acc_id: int) -> Response | None:
         serializer.save()
         return Response(serializer.data)
 
-    return None
-
-
-@api_view(['GET'])
-@permission_classes([AllowAny])
-def get_parsers(_request: Request) -> Response:
-    return Response(SUPPORTED_PARSERS)
+    return Response(status=status.HTTP_405_METHOD_NOT_ALLOWED)
 
 
 @api_view(['POST'])
@@ -83,7 +71,7 @@ def upload_transaction_file(request: Request) -> Response:
     audit_log = FileAudit.objects.create(
         file_name=uploaded_file.name,
         to_id=acc.id,
-        op_desc='TXN_UPLOAD',
+        op_desc='ACC_TXN_UPLOAD',
         status='LOADING',
         op_args=f'Acc:{acc.id}, dt_format:{dt_format}, reader:{parser}, grouper:{request.data["grouper"]}',
         user=request.user
@@ -95,10 +83,12 @@ def upload_transaction_file(request: Request) -> Response:
             for row in reader:
                 txns.append(Transaction(
                     account=acc,
-                    txn_date=datetime.strptime(row['txn_date'], dt_format).date().isoformat(),
+                    txn_date=timezone.make_aware(datetime.strptime(row['txn_date'], dt_format),
+                                                 ZoneInfo(settings.USER_SETTINGS.get("Main", "home_tz"))),
                     txn_desc=row['txn_desc'],
                     grp_name=get_group(serializer.validated_data['grouper'], row['txn_desc']),
-                    opr_dt=timezone.make_aware(datetime.strptime(row['opr_dt'], dt_format)),
+                    opr_dt=timezone.make_aware(datetime.strptime(row['opr_dt'], dt_format),
+                                               ZoneInfo(settings.USER_SETTINGS.get("Main", "home_tz"))),
                     dbt_amount=row['dbt_amount'],
                     cr_amount=row['cr_amount'],
                     ref_num=row['ref_num'],
@@ -183,7 +173,7 @@ def get_transactions_by_file(request: Request) -> Response:
         return Response({'error': f"Missing key: {e}"}, status=status.HTTP_400_BAD_REQUEST)
 
     queryset = Transaction.objects.filter(src_file_id__in=file_ids, src_file__user=request.user,
-                                          src_file__op_desc='TXN_UPLOAD').select_related('src_file')
+                                          src_file__op_desc='ACC_TXN_UPLOAD').select_related('src_file')
     serializer = TransactionSerializer(queryset, many=True)
     return Response(serializer.data)
 
@@ -204,14 +194,3 @@ def get_transactions_filtered(request: Request) -> Response:
 
     txns = TransactionSerializer(queryset, many=True)
     return Response(txns.data)
-
-
-@api_view(['DELETE'])
-def delete_uploaded_file(request: Request, file_id: int) -> Response:
-    audit_file = get_object_or_404(FileAudit, pk=file_id, status='LOADED')
-
-    if request.user != audit_file.user:
-        return Response({"error": "Account does not belong to you!"}, status=status.HTTP_403_FORBIDDEN)
-
-    audit_file.delete()
-    return Response(status=status.HTTP_204_NO_CONTENT)

@@ -1,11 +1,11 @@
 meta {
   name: Get Filtered Transactions
   type: http
-  seq: 11
+  seq: 7
 }
 
 get {
-  url: {{baseurl}}/transactions/filter
+  url: {{collection_url}}/transactions/filter/
   body: json
   auth: inherit
 }

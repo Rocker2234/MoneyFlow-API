@@ -1,18 +1,18 @@
 meta {
-  name: Edit Transaction
+  name: Get Transactions By Files
   type: http
-  seq: 8
+  seq: 6
 }
 
-patch {
-  url: {{collection_url}}/transaction/edit/1/
+get {
+  url: {{collection_url}}/transactions/by_files/
   body: json
   auth: inherit
 }
 
 body:json {
   {
-    "grp_name": ""
+    "file_ids": [1]
   }
 }
 
