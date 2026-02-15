@@ -5,13 +5,12 @@ meta {
 }
 
 post {
-  url: {{collection_url}}/transactions/upload/
+  url: {{collection_url}}/3/upload/
   body: multipartForm
   auth: inherit
 }
 
 body:multipart-form {
-  credit_card: 1
   dt_format: %d/%m/%Y %H:%M:%S
   parser: HDFC_CC_CSV
   file: @file(E:\Softwares\PyCharm\MoneyFlowAPI\moneyflow\parsers\Examples\HDFC_CC.csv)

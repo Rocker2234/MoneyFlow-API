@@ -1,0 +1,16 @@
+meta {
+  name: Cards
+  type: http
+  seq: 4
+}
+
+get {
+  url: {{collection_url}}/
+  body: json
+  auth: inherit
+}
+
+settings {
+  encodeUrl: true
+  timeout: 0
+}

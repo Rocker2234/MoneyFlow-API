@@ -4,7 +4,6 @@ from django.conf import settings
 from jinja2 import FileSystemLoader, TemplateNotFound
 from jinja2.sandbox import SandboxedEnvironment
 from rest_framework import serializers
-from rest_framework.exceptions import PermissionDenied
 
 from ..models import CreditCard, CreditTransaction
 from ..parsers import SUPPORTED_PARSERS
@@ -22,8 +21,7 @@ class TransactionSerializer(serializers.ModelSerializer):
     class Meta:
         model = CreditTransaction
         fields = ['id', 'credit_card', 'txn_date', 'txn_desc', 'grp_name', 'amt', 'is_credit', 'src_file']
-
-    read_only_fileds = ['id']
+        read_only_fields = ['id', 'credit_card', 'txn_date', 'txn_desc', 'amt', 'is_credit', 'src_file']
 
     def to_representation(self, instance):
         representation = super().to_representation(instance)
@@ -35,19 +33,10 @@ class TransactionSerializer(serializers.ModelSerializer):
 
 
 class TransactionFileUploadSerializer(serializers.Serializer):
-    credit_card = serializers.IntegerField()
     dt_format = serializers.CharField()
     parser = serializers.CharField(max_length=20)
     grouper = serializers.CharField(max_length=40, allow_blank=True, default='')
     file = serializers.FileField()
-
-    def validate_credit_card(self, value):
-        user = self.context['request'].user
-        try:
-            credit_card = CreditCard.objects.get(pk=value, user=user)
-        except CreditCard.DoesNotExist:
-            raise PermissionDenied("Account does not exist or doesn't belong to you")
-        return credit_card
 
     def validate_parser(self, value):
         if (value not in SUPPORTED_PARSERS.keys()) or value == "NULL":

@@ -1,18 +1,18 @@
 meta {
-  name: Get Transactions By Files
+  name: Delete CC File
   type: http
-  seq: 6
+  seq: 9
 }
 
-get {
-  url: {{collection_url}}/transactions/by_files/
+post {
+  url: {{collection_url}}/3/transactions/delete-by-files/
   body: json
   auth: inherit
 }
 
 body:json {
   {
-    "file_ids": [1]
+    "file_ids": [1,5]
   }
 }
 

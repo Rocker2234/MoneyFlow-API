@@ -1,140 +1,169 @@
 from datetime import datetime
 
 from django.db import transaction
-from django.shortcuts import get_object_or_404
+from django.db.models import QuerySet
 from django.utils import timezone
-from rest_framework import status
-from rest_framework.decorators import api_view
+from django_filters.rest_framework import DjangoFilterBackend
+from rest_framework import status, viewsets, mixins
+from rest_framework.decorators import action
+from rest_framework.filters import SearchFilter, OrderingFilter
 from rest_framework.request import Request
 from rest_framework.response import Response
+from rest_framework.viewsets import ModelViewSet
 
 from ..file_actions import get_reader, get_group
+from ..filters import CreditTransactionFilter
 from ..models import FileAudit
+from ..pagination import DefaultPagination
 from ..serializers.creditcard_serializers import *
 
 
-@api_view(['POST'])
-def add_card(request: Request) -> Response:
-    serializer = CreditCardSerializer(data=request.data)
-    serializer.is_valid(raise_exception=True)
-    serializer.save(user=request.user)
-    return Response(serializer.data, status=status.HTTP_201_CREATED)
+class CreditCardViewSet(ModelViewSet):
+    serializer_class = CreditCardSerializer
+    pagination_class = DefaultPagination
 
+    filter_backends = [SearchFilter, OrderingFilter]
+    search_fields = ['name', 'card_no']
+    ordering_fields = ['id', 'act_ind']
 
-@api_view(['GET', 'PUT', 'PATCH', 'DELETE'])
-def credit_card(request: Request, cc_id: int) -> Response:
-    cc = CreditCard.objects.get(pk=cc_id)
+    def get_queryset(self) -> QuerySet:
+        return CreditCard.objects.filter(user=self.request.user)
 
-    if request.user != cc.user:
-        return Response({"error": "Account does not belong to you!"}, status=status.HTTP_403_FORBIDDEN)
+    def get_serializer_context(self):
+        return {'request': self.request}
 
-    if request.method == 'GET':
-        serializer = CreditCardSerializer(cc)
-        return Response(serializer.data, status=status.HTTP_200_OK)
-
-    elif request.method == 'PUT':
-        serializer = CreditCardSerializer(cc, data=request.data)
+    def create(self, request, *args, **kwargs):
+        serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
-        serializer.save()
-        return Response(serializer.data)
+        serializer.save(user=request.user)
+        return Response(serializer.data, status=status.HTTP_201_CREATED)
 
-    elif request.method == 'PATCH':
-        serializer = CreditCardSerializer(cc, data=request.data, partial=True)
-        serializer.is_valid(raise_exception=True)
-        serializer.save()
-        return Response(serializer.data)
-
-    elif request.method == 'DELETE':
-        if cc.credit_transactions.count() > 0:
+    def destroy(self, request, *args, **kwargs):
+        if CreditTransaction.objects.filter(credit_card__id=kwargs['pk']).select_related('credit_card').count() > 0:
             return Response({'error': 'Card is accosiated with transactions!'}, status=status.HTTP_400_BAD_REQUEST)
-        cc.delete()
-        return Response(status=status.HTTP_204_NO_CONTENT)
+        return super().destroy(request, *args, **kwargs)
 
-    return Response(status=status.HTTP_405_METHOD_NOT_ALLOWED)
+    @action(detail=False, methods=['get'], url_path='transactions-by-file', url_name='cct-by-file')
+    def all_transactions(self, request: Request) -> Response:
+        """
+        Endpoint: GET /creditcard/transactions-by-file/
+        Returns all transactions for ALL cards belonging to the user.
+        """
+        queryset = CreditTransaction.objects.filter(src_file__user=request.user)
 
+        search_backend = SearchFilter()
+        filter_backend = DjangoFilterBackend()
+        ordering_backed = OrderingFilter()
+        vs = TransactionViewSet()
 
-@api_view(['POST'])
-def upload_transaction_file(request: Request) -> Response:
-    serializer = TransactionFileUploadSerializer(data=request.data, context={'request': request})
-    serializer.is_valid(raise_exception=True)
+        queryset = search_backend.filter_queryset(request, queryset, vs)
+        queryset = filter_backend.filter_queryset(request, queryset, vs)
+        queryset = ordering_backed.filter_queryset(request, queryset, vs)
 
-    cc = serializer.validated_data['credit_card']
-    dt_format = serializer.validated_data['dt_format']
-    parser = serializer.validated_data['parser']
+        if request.data.get("file_ids", None):
+            queryset = queryset.filter(src_file_id__in=request.data["file_ids"])
 
-    uploaded_file = request.FILES.get('file')
-    # if uploaded_file is None:
-    #     return Response({'error': 'No file provided!'}, status=status.HTTP_400_BAD_REQUEST)
+        queryset = queryset.select_related('src_file')
+        queryset = self.filter_queryset(queryset)
+        page = self.paginate_queryset(queryset)
 
-    txns = []
+        if page is not None:
+            serializer = TransactionSerializer(page, many=True)
+            return self.get_paginated_response(serializer.data)
 
-    audit_log = FileAudit.objects.create(
-        file_name=uploaded_file.name,
-        to_id=cc.id,
-        op_desc='CC_TXN_UPLOAD',
-        status='LOADING',
-        op_args=f'CC:{cc.id}, dt_format:{dt_format}, reader:{parser}, grouper:{request.data.get("grouper", "")}',
-        user=request.user
-    )
+        serializer = TransactionSerializer(queryset, many=True)
+        return Response(serializer.data)
 
-    try:
-        reader = get_reader(uploaded_file, parser)
-        with transaction.atomic():
-            for row in reader:
-                txns.append(CreditTransaction(
-                    credit_card=cc,
-                    txn_date=timezone.make_aware(datetime.strptime(row['txn_date'], dt_format),
-                                                 ZoneInfo(settings.USER_SETTINGS.get("Main", "home_tz"))),
-                    txn_desc=row['txn_desc'],
-                    grp_name=get_group(serializer.validated_data['grouper'], row['txn_desc']),
-                    amt=row['amt'],
-                    is_credit=row['is_credit'] == 'Y',
-                    src_file=audit_log
-                ))
-            CreditTransaction.objects.bulk_create(txns)
-            audit_log.status = 'LOADED'
+    @action(detail=True, methods=['post'], url_path='upload')
+    def upload_transaction_file(self, request: Request, pk: int) -> Response:
+        cc = self.get_object()
+
+        serializer = TransactionFileUploadSerializer(data=request.data, context={'request': request})
+        serializer.is_valid(raise_exception=True)
+
+        dt_format = serializer.validated_data['dt_format']
+        parser = serializer.validated_data['parser']
+
+        uploaded_file = request.FILES.get('file')
+
+        txns = []
+
+        audit_log = FileAudit.objects.create(
+            file_name=uploaded_file.name,
+            to_id=cc.id,
+            op_desc='CC_TXN_UPLOAD',
+            status='LOADING',
+            op_args=f'CC:{cc.id}, dt_format:{dt_format}, reader:{parser}, grouper:{request.data.get("grouper", "")}',
+            user=request.user
+        )
+
+        try:
+            reader = get_reader(uploaded_file, parser)
+            with transaction.atomic():
+                for row in reader:
+                    txns.append(CreditTransaction(
+                        credit_card=cc,
+                        txn_date=timezone.make_aware(datetime.strptime(row['txn_date'], dt_format),
+                                                     ZoneInfo(settings.USER_SETTINGS.get("Main", "home_tz"))),
+                        txn_desc=row['txn_desc'],
+                        grp_name=get_group(serializer.validated_data['grouper'], row['txn_desc']),
+                        amt=row['amt'],
+                        is_credit=row['is_credit'] == 'Y',
+                        src_file=audit_log
+                    ))
+                CreditTransaction.objects.bulk_create(txns)
+                audit_log.status = 'LOADED'
+                audit_log.save()
+            return Response({
+                'file': audit_log.file_name,
+                'id': audit_log.id,
+            }, status=status.HTTP_201_CREATED)
+        except ValueError as e:
+            audit_log.status = 'ERROR'
+            audit_log.op_add_txt = str(e)
             audit_log.save()
-        return Response({
-            'file': audit_log.file_name,
-            'id': audit_log.id,
-        }, status=status.HTTP_201_CREATED)
-    except ValueError as e:
-        audit_log.status = 'ERROR'
-        audit_log.op_add_txt = str(e)
-        audit_log.save()
-        return Response({'error': f"{e.__class__.__name__}: {e}"}, status=status.HTTP_400_BAD_REQUEST)
-    except Exception as e:
-        audit_log.status = 'ERROR'
-        audit_log.op_add_txt = str(e)
-        audit_log.save()
-        return Response({'error': f"{e.__class__.__name__}: {e}"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+            return Response({'error': f"{e.__class__.__name__}: {e}"}, status=status.HTTP_400_BAD_REQUEST)
+        except Exception as e:
+            audit_log.status = 'ERROR'
+            audit_log.op_add_txt = str(e)
+            audit_log.save()
+            return Response({'error': f"{e.__class__.__name__}: {e}"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+    @action(detail=True, methods=['post'], url_path='delete-txn-files', url_name='cct-delete-by-files')
+    def delete_file(self, request: Request, pk: int) -> Response:
+        cc = self.get_object()
+
+        if request.data.get("file_ids", None):
+            file_ids = request.data.get("file_ids")
+        else:
+            return Response({'error': "File IDs not specified"}, status=status.HTTP_400_BAD_REQUEST)
+
+        with transaction.atomic():
+            queryset = FileAudit.objects.filter(op_desc='CC_TXN_UPLOAD', to_id=cc.id, pk__in=file_ids)
+
+            if queryset.count() == 0:
+                return Response({'error': "File not found"}, status=status.HTTP_404_NOT_FOUND)
+
+            deleted_count, deleted_details = queryset.delete()
+            return Response({
+                "message": f"Successfully deleted {deleted_count} entries(s).",
+                "details": deleted_details
+            }, status=status.HTTP_200_OK)
 
 
-@api_view(['PATCH'])
-def edit_transaction(request: Request, txn_id: int) -> Response:
-    txn = get_object_or_404(CreditTransaction, pk=txn_id)
+class TransactionViewSet(mixins.RetrieveModelMixin, mixins.UpdateModelMixin, mixins.ListModelMixin,
+                         viewsets.GenericViewSet):
+    serializer_class = TransactionSerializer
+    filter_backends = [DjangoFilterBackend, SearchFilter, OrderingFilter]
 
-    if request.user != txn.credit_card.user:
-        return Response({"error": "Transaction does not belong to you!"}, status=status.HTTP_403_FORBIDDEN)
+    filterset_class = CreditTransactionFilter
+    search_fields = ['txn_desc', 'grp_name']
+    ordering_fields = ['txn_date', 'grp_name', 'amt', 'is_credit']
 
-    allowed_fields = {'grp_name'}
-    if not set(request.data.keys()).issubset(allowed_fields):
-        return Response({'error': f'Only support {allowed_fields}'}, status=status.HTTP_403_FORBIDDEN)
+    def get_queryset(self):
+        return CreditTransaction.objects.filter(credit_card__id=self.kwargs['cc_pk'],
+                                                src_file__user=self.request.user
+                                                ).select_related('src_file', 'credit_card')
 
-    serializer = TransactionSerializer(txn, data=request.data, partial=True)
-    serializer.is_valid(raise_exception=True)
-    serializer.save()
-    return Response(serializer.data)
-
-
-@api_view(['GET'])
-def get_transactions_by_file(request: Request) -> Response:
-    try:
-        file_ids = request.data['file_ids']
-    except KeyError as e:
-        return Response({'error': f"Missing key: {e}"}, status=status.HTTP_400_BAD_REQUEST)
-
-    queryset = CreditTransaction.objects.filter(src_file_id__in=file_ids, src_file__user=request.user,
-                                                src_file__op_desc='CC_TXN_UPLOAD').select_related('src_file')
-    serializer = TransactionSerializer(queryset, many=True)
-    return Response(serializer.data)
+    def destroy(self, request, *args, **kwargs):
+        return Response(status=status.HTTP_405_METHOD_NOT_ALLOWED)

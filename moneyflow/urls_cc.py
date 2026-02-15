@@ -1,15 +1,18 @@
-from django.urls import path
+from django.urls import path, include
+from rest_framework_nested.routers import DefaultRouter, NestedDefaultRouter
 
 from .views import common, creditcard
 
+cc_router = DefaultRouter()
+cc_router.register('', creditcard.CreditCardViewSet, 'cc')
+
+cc_transaction_router = NestedDefaultRouter(cc_router, '', lookup='cc')
+cc_transaction_router.register('transactions', creditcard.TransactionViewSet, 'cc_transaction')
+
 urlpatterns = [
-    path('add/', creditcard.add_card, name='add_cc'),
-    path('<int:cc_id>/', creditcard.credit_card, name='get_cc'),
+    path('', include(cc_router.urls)),
+    path('', include(cc_transaction_router.urls)),
 
     # File Related Paths
     path('parsers/', common.get_parsers, name='get_parsers'),
-    path('transactions/upload/', creditcard.upload_transaction_file, name='upload_cc_transaction_file'),
-    path('transaction/edit/<int:txn_id>/', creditcard.edit_transaction, name='edit_cc_transaction'),
-    path('transactions/delete/<int:file_id>/', common.delete_uploaded_file, name='delete_cc_transaction_file'),
-    path('transactions/by_files/', creditcard.get_transactions_by_file, name='get_cc_transaction_for_files'),
 ]

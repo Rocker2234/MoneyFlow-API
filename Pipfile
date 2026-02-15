@@ -10,6 +10,8 @@ jinja2 = "*"
 xlrd = "*"
 djangorestframework-stubs = "*"
 djangorestframework-simplejwt = "*"
+drf-nested-routers = "*"
+django-filter = "*"
 
 [dev-packages]
 
