@@ -4,12 +4,12 @@ info:
   type: workspace
 
 collections:
+  - name: "Core"
+    path: "collections\\Core"
   - name: "Accounts"
     path: "collections\\Accounts"
   - name: "Credit"
     path: "collections\\Credit"
-  - name: "Core"
-    path: "collections\\Core"
 
 specs:
 

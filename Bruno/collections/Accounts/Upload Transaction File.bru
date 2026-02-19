@@ -5,13 +5,12 @@ meta {
 }
 
 post {
-  url: {{collection_url}}/transactions/upload/
+  url: {{collection_url}}/1/upload/
   body: multipartForm
   auth: inherit
 }
 
 body:multipart-form {
-  account: 1
   dt_format: %d/%m/%y
   parser: HDFC_D
   grouper: HDFC

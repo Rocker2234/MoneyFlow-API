@@ -5,7 +5,6 @@ from jinja2 import FileSystemLoader
 from jinja2.exceptions import TemplateNotFound
 from jinja2.sandbox import SandboxedEnvironment
 from rest_framework import serializers
-from rest_framework.exceptions import PermissionDenied
 
 from ..models import Account, Transaction
 from ..parsers import SUPPORTED_PARSERS
@@ -26,7 +25,8 @@ class TransactionSerializer(serializers.ModelSerializer):
         fields = ['id', 'account', 'txn_date', 'txn_desc', 'grp_name', 'opr_dt', 'dbt_amount', 'cr_amount', 'ref_num',
                   'cf_amt', 'src_file']
 
-    read_only_fields = ['id']
+    read_only_fields = ['id', 'account', 'txn_date', 'txn_desc', 'opr_dt', 'dbt_amount', 'cr_amount', 'ref_num',
+                        'cf_amt', 'src_file']
 
     def to_representation(self, instance):
         representation = super().to_representation(instance)
@@ -40,19 +40,10 @@ class TransactionSerializer(serializers.ModelSerializer):
 
 
 class TransactionFileUploadSerializer(serializers.Serializer):
-    account = serializers.IntegerField()
     dt_format = serializers.CharField()
     parser = serializers.CharField(max_length=20)
-    grouper = serializers.CharField(max_length=40)
+    grouper = serializers.CharField(max_length=40, allow_blank=True, default='')
     file = serializers.FileField()
-
-    def validate_account(self, value):
-        user = self.context['request'].user
-        try:
-            account = Account.objects.get(pk=value, user=user)
-        except Account.DoesNotExist:
-            raise PermissionDenied("Account does not exist or doesn't belong to you")
-        return account
 
     def validate_parser(self, value):
         if (value not in SUPPORTED_PARSERS.keys()) or value == "NULL":
@@ -82,7 +73,7 @@ class TransactionFileUploadSerializer(serializers.Serializer):
 
 
 class RerunGroupSerializer(serializers.Serializer):
-    grouper = serializers.CharField(max_length=40)
+    grouper = serializers.CharField(max_length=40, allow_blank=True, default='')
     blanks_only = serializers.BooleanField()
 
     def validate_grouper(self, value):
@@ -95,11 +86,6 @@ class RerunGroupSerializer(serializers.Serializer):
             return template
         except TemplateNotFound:
             raise serializers.ValidationError("Invalid Grouper")
-
-    def validate(self, attrs):
-        if self.context['request'].user != self.context['file'].user:
-            raise PermissionDenied("File does not belong to you")
-        return attrs
 
 
 class TransactionByDateSerializer(serializers.Serializer):

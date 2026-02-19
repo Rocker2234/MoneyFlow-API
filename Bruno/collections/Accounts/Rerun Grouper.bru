@@ -4,15 +4,16 @@ meta {
   seq: 9
 }
 
-patch {
-  url: {{collection_url}}/transactions/regroup/1
+post {
+  url: {{collection_url}}/3/regroup/
   body: json
   auth: inherit
 }
 
 body:json {
   {
-    "grouper": "HDFC",
+    "file_ids": [1,2,3,4,7],
+    "grouper": "",
     "blanks_only": false
   }
 }

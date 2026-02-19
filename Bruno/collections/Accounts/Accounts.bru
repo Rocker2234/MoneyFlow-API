@@ -1,0 +1,16 @@
+meta {
+  name: Accounts
+  type: http
+  seq: 3
+}
+
+get {
+  url: {{collection_url}}/
+  body: json
+  auth: inherit
+}
+
+settings {
+  encodeUrl: true
+  timeout: 0
+}

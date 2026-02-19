@@ -25,7 +25,6 @@ admin.site.index_title = 'Manage Data & Permissions'
 urlpatterns = [
     path(URL_START_DIR + 'admin/', admin.site.urls),
     path(URL_START_DIR, include('core.urls')),
-    path(URL_START_DIR + 'account/', include('moneyflow.urls_account')),
-    path(URL_START_DIR + 'creditcard/', include('moneyflow.urls_cc')),
+    path(URL_START_DIR, include('moneyflow.urls')),
     path(URL_START_DIR + 'tags/', include('tags.urls')),
 ]

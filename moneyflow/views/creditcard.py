@@ -4,12 +4,13 @@ from django.db import transaction
 from django.db.models import QuerySet
 from django.utils import timezone
 from django_filters.rest_framework import DjangoFilterBackend
-from rest_framework import status, viewsets, mixins
+from rest_framework import status
 from rest_framework.decorators import action
 from rest_framework.filters import SearchFilter, OrderingFilter
+from rest_framework.mixins import RetrieveModelMixin, UpdateModelMixin, ListModelMixin
 from rest_framework.request import Request
 from rest_framework.response import Response
-from rest_framework.viewsets import ModelViewSet
+from rest_framework.viewsets import ModelViewSet, GenericViewSet
 
 from ..file_actions import get_reader, get_group
 from ..filters import CreditTransactionFilter
@@ -43,10 +44,10 @@ class CreditCardViewSet(ModelViewSet):
             return Response({'error': 'Card is accosiated with transactions!'}, status=status.HTTP_400_BAD_REQUEST)
         return super().destroy(request, *args, **kwargs)
 
-    @action(detail=False, methods=['get'], url_path='transactions-by-file', url_name='cct-by-file')
+    @action(detail=False, methods=['get'], url_path='all-txns', url_name='cct-all')
     def all_transactions(self, request: Request) -> Response:
         """
-        Endpoint: GET /creditcard/transactions-by-file/
+        Endpoint: GET /creditcards/all-txns/
         Returns all transactions for ALL cards belonging to the user.
         """
         queryset = CreditTransaction.objects.filter(src_file__user=request.user)
@@ -151,8 +152,7 @@ class CreditCardViewSet(ModelViewSet):
             }, status=status.HTTP_200_OK)
 
 
-class TransactionViewSet(mixins.RetrieveModelMixin, mixins.UpdateModelMixin, mixins.ListModelMixin,
-                         viewsets.GenericViewSet):
+class TransactionViewSet(RetrieveModelMixin, UpdateModelMixin, ListModelMixin, GenericViewSet):
     serializer_class = TransactionSerializer
     filter_backends = [DjangoFilterBackend, SearchFilter, OrderingFilter]
 

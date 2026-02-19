@@ -1,13 +1,13 @@
 meta {
-  name: Get Parsers
+  name: Delete ACC
   type: http
-  seq: 4
+  seq: 11
 }
 
-get {
-  url: {{collection_url}}/parsers/
+delete {
+  url: {{collection_url}}/1/
   body: none
-  auth: none
+  auth: inherit
 }
 
 settings {
