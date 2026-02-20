@@ -48,11 +48,13 @@ class AccountViewSet(ModelViewSet):
     def upload_transaction_file(self, request: Request, pk: int) -> Response:
         acc = self.get_object()
 
-        serializer = TransactionFileUploadSerializer(data=request.data, context={'request': request})
+        serializer = TransactionFileUploadSerializer(data=request.data, context={'request': request, 'acc': acc})
         serializer.is_valid(raise_exception=True)
 
         dt_format = serializer.validated_data['dt_format']
         parser = serializer.validated_data['parser']
+        is_future_only = serializer.validated_data['is_future_only']
+        is_strict_future = serializer.validated_data['is_strict_future']
 
         uploaded_file = request.FILES.get('file')
         if uploaded_file is None:
@@ -71,9 +73,13 @@ class AccountViewSet(ModelViewSet):
 
         try:
             reader = get_reader(uploaded_file, parser)
+            latest_txn = Transaction.objects.filter(account=acc).order_by('-txn_date',
+                                                                          '-id').first() if is_future_only else None
+            found_match = False
+
             with transaction.atomic():
                 for row in reader:
-                    txns.append(Transaction(
+                    this_txn = Transaction(
                         account=acc,
                         txn_date=timezone.make_aware(datetime.strptime(row['txn_date'], dt_format),
                                                      ZoneInfo(settings.USER_SETTINGS.get("Main", "home_tz"))),
@@ -86,14 +92,38 @@ class AccountViewSet(ModelViewSet):
                         ref_num=row['ref_num'],
                         cf_amt=row['cf_amt'],
                         src_file=audit_log
-                    ))
-                Transaction.objects.bulk_create(txns)
-                audit_log.status = 'LOADED'
-                audit_log.save()
-            return Response({
-                'file': audit_log.file_name,
-                'id': audit_log.id,
-            }, status=status.HTTP_201_CREATED)
+                    )
+
+                    # If user requested validation run tests until first match
+                    if latest_txn and (not found_match):
+                        if is_strict_future:    # Only insert the transactions after finding the latest uploaded transaction
+                            found_match = (
+                                    this_txn.cf_amt == str(latest_txn.cf_amt) and
+                                    this_txn.txn_date == latest_txn.txn_date and
+                                    this_txn.txn_desc == latest_txn.txn_desc
+                            )
+                            continue
+                        elif is_future_only:    # Only insert transactions that's after the latest uploaded transaction
+                            if this_txn.txn_date < latest_txn.txn_date:
+                                continue
+                            found_match = True
+                    txns.append(this_txn)
+                if len(txns) != 0:
+                    Transaction.objects.bulk_create(txns)
+                    audit_log.status = 'LOADED'
+                    audit_log.save()
+                else:
+                    audit_log.status = 'NO TXNS'
+                    audit_log.save()
+
+            if len(txns) != 0:
+                return Response({
+                    'file': audit_log.file_name,
+                    'id': audit_log.id,
+                    'txns': len(txns)
+                }, status=status.HTTP_201_CREATED)
+            else:
+                return Response({'message': "File did not meet conditions"}, status=status.HTTP_422_UNPROCESSABLE_ENTITY)
         except Exception as e:
             audit_log.status = 'ERROR'
             audit_log.op_add_txt = str(e)

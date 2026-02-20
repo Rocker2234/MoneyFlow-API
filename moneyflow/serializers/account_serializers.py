@@ -41,17 +41,25 @@ class TransactionSerializer(serializers.ModelSerializer):
 
 class TransactionFileUploadSerializer(serializers.Serializer):
     dt_format = serializers.CharField()
-    parser = serializers.CharField(max_length=20)
+    parser = serializers.CharField(max_length=20, allow_blank=True, default='')
     grouper = serializers.CharField(max_length=40, allow_blank=True, default='')
     file = serializers.FileField()
+    is_future_only = serializers.BooleanField(allow_null=True, default=False)
+    is_strict_future = serializers.BooleanField(allow_null=True, default=False)
 
     def validate_parser(self, value):
+        value = self.context['acc'].def_parser if not value else value
+
         if (value not in SUPPORTED_PARSERS.keys()) or value == "NULL":
             raise serializers.ValidationError("Unknown Parser")
         return value
 
     def validate_grouper(self, value):
-        if value in ("NULL", ""):
+        if value == "<skip>":
+            return None
+
+        value = self.context['acc'].def_grouper if not value else value
+        if not value:
             return None
 
         try:
@@ -70,6 +78,11 @@ class TransactionFileUploadSerializer(serializers.Serializer):
             raise serializers.ValidationError("Invalid File")
 
         return value
+
+    def validate(self, attrs):
+        if (not attrs["is_future_only"]) and attrs["is_strict_future"]:
+            raise serializers.ValidationError("Future Only is required when using Strict Future.")
+        return attrs
 
 
 class RerunGroupSerializer(serializers.Serializer):
