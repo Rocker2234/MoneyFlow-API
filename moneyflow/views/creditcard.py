@@ -47,8 +47,14 @@ class CreditCardViewSet(ModelViewSet):
     @action(detail=False, methods=['get'], url_path='all-txns', url_name='cct-all')
     def all_transactions(self, request: Request) -> Response:
         """
-        Endpoint: GET /creditcards/all-txns/
-        Returns all transactions for ALL cards belonging to the user.
+        Handles the retrieval of all credit transactions associated with the authenticated user. The method
+        applies search, filtering, and ordering to the transactions based on the provided request parameters.
+        It retrieves user-specific transactions, optionally filters them by file IDs, and prepares the
+        resulting queryset for paginated or non-paginated response in case of problems with pagination.
+
+        :param request: The HTTP request object containing user authentication, filters, and optional file IDs.
+        :return: A paginated or complete response containing serialized transaction data matching the user's
+                 query and filters.
         """
         queryset = CreditTransaction.objects.filter(src_file__user=request.user)
 
@@ -77,6 +83,21 @@ class CreditCardViewSet(ModelViewSet):
 
     @action(detail=True, methods=['post'], url_path='upload')
     def upload_transaction_file(self, request: Request, pk: int) -> Response:
+        """
+        Handles the uploading of transaction files for a specific credit card account. This method
+        parses the uploaded file, validates the content, and processes transaction data to persist
+        it into the database. In addition, it logs the operation audit, including file details and
+        status updates.
+
+        :param request: The HTTP request object containing the uploaded file and additional
+            parameters for file processing, such as date format and parser choice.
+
+        :param pk: The primary key identifying the credit card account to which transactions
+            relate.
+
+        :return: Response containing details of the file upload upon successful processing,
+            or an error message in case of exceptions.
+        """
         cc = self.get_object()
 
         serializer = TransactionFileUploadSerializer(data=request.data, context={'request': request})
@@ -132,6 +153,18 @@ class CreditCardViewSet(ModelViewSet):
 
     @action(detail=True, methods=['post'], url_path='delete-txn-files', url_name='cct-delete-by-files')
     def delete_file(self, request: Request, pk: int) -> Response:
+        """
+        Handles the deletion of specific transaction files related to a given object.
+
+        The method retrieves the associated object and deletes the specified files
+        based on their IDs. The operation is atomic, ensuring that the database state
+        is not partially updated if an error occurs during execution.
+
+        :param request: The HTTP request containing the file IDs to delete in the payload.
+        :param pk: The primary key of the credit card to which the transaction files are tied.
+        :return: A Response containing the deletion status and details of the deleted files,
+            or an error message with the respective status code.
+        """
         cc = self.get_object()
 
         if request.data.get("file_ids", None):

@@ -46,6 +46,21 @@ class AccountViewSet(ModelViewSet):
 
     @action(detail=True, methods=['post'], url_path='upload')
     def upload_transaction_file(self, request: Request, pk: int) -> Response:
+        """
+        Handles the upload of transaction files for a specific account. This method processes
+        the uploaded file by validating the entries, checking for duplicates or conditions
+        based on parameters, and creating new transaction records in the database.
+
+        :param request: The HTTP request containing the uploaded file and additional upload
+            parameters such as date format, parser selection, and grouping strategy.
+            Should be of type Request.
+        :param pk: The primary key of the account for which the transactions are being uploaded.
+            Should be of type int.
+        :return: A Response containing details of the uploaded file, the number of transactions
+            created, or an error message in case of failure. Possible statuses include
+            HTTP_201_CREATED for success, HTTP_422_UNPROCESSABLE_ENTITY for unmet conditions,
+            and HTTP_500_INTERNAL_SERVER_ERROR for unexpected failures.
+        """
         acc = self.get_object()
 
         serializer = TransactionFileUploadSerializer(data=request.data, context={'request': request, 'acc': acc})
@@ -133,8 +148,15 @@ class AccountViewSet(ModelViewSet):
     @action(detail=False, methods=['get'], url_path='all-txns', url_name='acct-all')
     def all_transactions(self, request: Request) -> Response:
         """
-        Endpoint: GET /accounts/all-txns/
-        Returns all transactions for ALL accounts belonging to the user.
+        Retrieve and filter all transactions for the authenticated user. This view provides support
+        for search, filter, and ordering backends. Optionally, transactions can be filtered
+        by associated file IDs.
+
+        :param request: The incoming HTTP request containing any filtering and search criteria
+            including optional `file_ids` in the request data for filtering transactions by files.
+
+        :return: A paginated response with serialized transaction data or a full
+            response containing all matched transactions if no pagination is applied.
         """
         queryset = Transaction.objects.filter(src_file__user=request.user)
 
@@ -163,6 +185,17 @@ class AccountViewSet(ModelViewSet):
 
     @action(detail=True, methods=['post'], url_path='regroup')
     def rerun_grouper(self, request: Request, pk: int) -> Response:
+        """
+        Handles the operation to regroup transactions for a specific account, optionally
+        filtering by specific files or blank groups.
+
+        :param request: The HTTP request object containing user context and additional data
+            for processing, including file identifiers and regrouping options.
+        :param pk: The primary key of the account for which the regrouping operation should
+            be applied.
+        :return: A response object containing the count of transactions updated during the
+            regrouping process or an error message in case of failure.
+        """
         acc = self.get_object()
         files = FileAudit.objects.filter(op_desc='ACC_TXN_UPLOAD', user=request.user, to_id=acc.id)
 
@@ -206,6 +239,27 @@ class AccountViewSet(ModelViewSet):
 
     @action(detail=True, methods=['post'], url_path='delete-txn-files', url_name='acct-delete-by-files')
     def delete_file(self, request: Request, pk: int) -> Response:
+        """
+        Deletes transaction files associated with a specific account if matching file IDs are provided.
+
+        This method processes the deletion of transaction files that are audited as part of the
+        `ACC_TXN_UPLOAD` operation. It ensures transactional integrity during the deletion process
+        to prevent partial updates and validates whether the specified file IDs exist before
+        proceeding with deletion.
+
+        :param request: The HTTP request object containing the necessary data for file deletion.
+            It must include `file_ids` as part of the request payload to specify the files
+            that should be deleted.
+        :param pk: The primary key of the account object whose transaction files will be checked
+            and deleted.
+        :return: An HTTP response object indicating the status of the operation:
+            - If `file_ids` are not specified, a 400 Bad Request response is returned
+              with an appropriate error message.
+            - If no files matching the provided IDs are found, a 404 Not Found response
+              is returned with an error message.
+            - On successful deletion, a 200 OK response is returned with the number of
+              entries deleted and details of the deleted entries.
+        """
         acc = self.get_object()
 
         if request.data.get("file_ids"):
@@ -213,17 +267,18 @@ class AccountViewSet(ModelViewSet):
         else:
             return Response({'error': "File IDs not specified"}, status=status.HTTP_400_BAD_REQUEST)
 
+        queryset = FileAudit.objects.filter(op_desc='ACC_TXN_UPLOAD', to_id=acc.id, pk__in=file_ids)
+
+        if queryset.count() == 0:
+            return Response({'error': "No transaction file found"}, status=status.HTTP_404_NOT_FOUND)
+
         with transaction.atomic():
-            queryset = FileAudit.objects.filter(op_desc='ACC_TXN_UPLOAD', to_id=acc.id, pk__in=file_ids)
-
-            if queryset.count() == 0:
-                return Response({'error': "No transaction file found"}, status=status.HTTP_404_NOT_FOUND)
-
             deleted_count, deleted_details = queryset.delete()
-            return Response({
-                "message": f"Successfully deleted {deleted_count} entries(s).",
-                "details": deleted_details
-            }, status=status.HTTP_200_OK)
+
+        return Response({
+            "message": f"Successfully deleted {deleted_count} entries(s).",
+            "details": deleted_details
+        }, status=status.HTTP_200_OK)
 
 
 class TransactionViewSet(RetrieveModelMixin, UpdateModelMixin, ListModelMixin, GenericViewSet):
