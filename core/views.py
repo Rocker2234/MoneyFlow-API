@@ -9,7 +9,7 @@ from rest_framework_simplejwt.tokens import RefreshToken
 from .serializers import UserSerializer
 
 
-@api_view()
+@api_view(['GET', 'POST'])
 @permission_classes([AllowAny])
 def check_conn(_request: Request) -> Response:
     """

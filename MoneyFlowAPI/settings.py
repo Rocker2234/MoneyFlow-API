@@ -12,6 +12,8 @@ https://docs.djangoproject.com/en/5.2/ref/settings/
 from datetime import timedelta
 from pathlib import Path
 
+from corsheaders.defaults import default_headers
+
 from . import USER_SETTINGS, db_engine_mapping
 
 db_config = {
@@ -64,7 +66,6 @@ INSTALLED_APPS = [
 
 MIDDLEWARE = [
     "corsheaders.middleware.CorsMiddleware",
-    "django.middleware.common.CommonMiddleware",
     'django.middleware.security.SecurityMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
@@ -143,13 +144,19 @@ STATIC_URL = 'static/'
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
-# CORS_ALLOW_ALL_ORIGINS = True
-CORS_ALLOW_CREDENTIALS = True
 
 CORS_ALLOWED_ORIGINS = [
     "http://127.0.0.1:8000",
+    "http://localhost:8000",
     "http://127.0.0.1:8080",
+    "http://localhost:8080",
 ]
+
+CORS_ALLOW_HEADERS = (
+    *default_headers,
+)
+
+CORS_ALLOW_CREDENTIALS = True
 
 REST_FRAMEWORK = {
     'COERCE_DECIMAL_TO_STRING': False,
