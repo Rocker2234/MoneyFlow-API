@@ -12,6 +12,7 @@ djangorestframework-stubs = "*"
 djangorestframework-simplejwt = "*"
 drf-nested-routers = "*"
 django-filter = "*"
+django-cors-headers = "*"
 
 [dev-packages]
 
