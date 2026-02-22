@@ -8,8 +8,13 @@ def parse_delimited(uploaded_file: BufferedReader) -> str:
     stream = TextIOWrapper(uploaded_file, encoding='utf-8')
     stream.__next__()
     stream.__next__()
-    lines = stream.readlines()
-    lines = [str(line).replace(' ', '') for line in lines]
+    raw_lines = stream.readlines()
+    lines = []
+    for line in raw_lines:
+        # Remove Commas in Narration
+        line = line[:14] + line[14:133].replace(',', '~') + line[133:]
+        line = line.replace(' ', '')
+        lines.append(line)
     ret = FILE_HEADER + '\n'
     for line in lines:
         ret += line
@@ -44,6 +49,10 @@ def parse_cc_csv(uploaded_file: BufferedReader) -> str:
 
 
 if __name__ == '__main__':
-    with open('Examples/HDFC_CC.csv', 'rb') as csvfile:
+    # with open('Examples/HDFC_CC.csv', 'rb') as csvfile:
+    #     with open('Examples/Test.csv', 'w') as f:
+    #         f.writelines(parse_cc_csv(csvfile))
+
+    with open('Examples/HDFC_D.txt', 'rb') as del_file:
         with open('Examples/Test.csv', 'w') as f:
-            f.writelines(parse_cc_csv(csvfile))
+            f.writelines(parse_delimited(del_file))
