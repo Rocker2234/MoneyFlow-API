@@ -17,10 +17,15 @@ cc_router.register('creditcards', creditcard.CreditCardViewSet, 'cc')
 cc_transaction_router = NestedDefaultRouter(cc_router, 'creditcards', lookup='cc')
 cc_transaction_router.register('transactions', creditcard.TransactionViewSet, 'cc_transaction')
 
+# Audit File Router
+af_router = DefaultRouter()
+af_router.register('files', common.FileAuditViewSet, basename='files')
+
 urlpatterns = [
     path('parsers/', common.get_parsers, name='get_parsers'),
     path('', include(acc_router.urls)),
     path('', include(cc_router.urls)),
     path('', include(acc_transaction.urls)),
     path('', include(cc_transaction_router.urls)),
+    path('', include(af_router.urls)),
 ]

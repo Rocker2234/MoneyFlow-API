@@ -5,15 +5,20 @@ meta {
 }
 
 get {
-  url: {{collection_url}}/all-txns/
+  url: {{collection_url}}/all-txns/?page=1&search=UPI
   body: json
   auth: inherit
 }
 
+params:query {
+  page: 1
+  search: UPI
+}
+
 body:json {
-  {
-    "file_ids": [1,2,3,4]
-  }
+  // {
+  //   "file_ids": [1,2,3,4]
+  // }
 }
 
 settings {

@@ -5,9 +5,14 @@ meta {
 }
 
 get {
-  url: {{collection_url}}/
+  url: {{collection_url}}/?page=1
   body: json
   auth: inherit
+}
+
+params:query {
+  page: 1
+  ~search: HDFC
 }
 
 settings {

@@ -13,7 +13,7 @@ from rest_framework.response import Response
 from rest_framework.viewsets import ModelViewSet, GenericViewSet
 
 from ..file_actions import get_reader, get_group
-from ..filters import AccTransactionFilter
+from ..filters import AccTransactionFilter, AccSearchFilter
 from ..models import FileAudit
 from ..pagination import DefaultPagination
 from ..serializers.account_serializers import *
@@ -23,8 +23,7 @@ class AccountViewSet(ModelViewSet):
     serializer_class = AccountSerializer
     pagination_class = DefaultPagination
 
-    filter_backends = [SearchFilter, OrderingFilter]
-    search_fields = ['name', 'acc_no', 'ifsc_code']
+    filter_backends = [AccSearchFilter, OrderingFilter]
     ordering_fields = ['id', 'act_ind', 'min_bal']
 
     def get_queryset(self) -> QuerySet:
@@ -82,7 +81,7 @@ class AccountViewSet(ModelViewSet):
             to_id=acc.id,
             op_desc='ACC_TXN_UPLOAD',
             status='LOADING',
-            op_args=f'Acc:{acc.id}, dt_format:{dt_format}, reader:{parser}, grouper:{request.data.get("grouper", "")}',
+            op_args=f'dt_format:{dt_format}, parser:{parser}, grouper:{serializer.validated_data["grouper"]}',
             user=request.user
         )
 
@@ -160,19 +159,18 @@ class AccountViewSet(ModelViewSet):
         """
         queryset = Transaction.objects.filter(src_file__user=request.user)
 
-        search_backend = SearchFilter()
+        search_backend = AccSearchFilter()
         filter_backend = DjangoFilterBackend()
         ordering_backed = OrderingFilter()
-        vs = TransactionViewSet()
 
-        queryset = search_backend.filter_queryset(request, queryset, vs)
-        queryset = filter_backend.filter_queryset(request, queryset, vs)
-        queryset = ordering_backed.filter_queryset(request, queryset, vs)
+        queryset = search_backend.filter_queryset(request, queryset, self)
+        queryset = filter_backend.filter_queryset(request, queryset, self)
+        queryset = ordering_backed.filter_queryset(request, queryset, self)
 
         if request.data.get("file_ids", None):
             queryset = queryset.filter(src_file_id__in=request.data["file_ids"])
 
-        queryset = queryset.select_related('src_file')
+        queryset = queryset.select_related('src_file').order_by('-txn_date', '-id')
         queryset = self.filter_queryset(queryset)
         page = self.paginate_queryset(queryset)
 

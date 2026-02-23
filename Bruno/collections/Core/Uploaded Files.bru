@@ -1,0 +1,32 @@
+meta {
+  name: Uploaded Files
+  type: http
+  seq: 6
+}
+
+get {
+  url: {{baseurl}}/files/?isrt_dt__lte=2026-02-23T18:11:40.066387Z&isrt_dt__gte
+  body: json
+  auth: bearer
+}
+
+params:query {
+  isrt_dt__lte: 2026-02-23T18:11:40.066387Z
+  isrt_dt__gte: 
+  ~search: CC
+}
+
+auth:bearer {
+  token: {{jwt_access}}
+}
+
+body:json {
+  // {
+  //   "op_desc": "ACC_TXN_UPLOAD"
+  // }
+}
+
+settings {
+  encodeUrl: true
+  timeout: 0
+}
