@@ -1,7 +1,10 @@
+import json
+
 from django_filters.rest_framework import DjangoFilterBackend
-from rest_framework.decorators import api_view, permission_classes
+from rest_framework import status
+from rest_framework.decorators import api_view, permission_classes, action
 from rest_framework.filters import SearchFilter
-from rest_framework.mixins import ListModelMixin, RetrieveModelMixin, DestroyModelMixin
+from rest_framework.mixins import ListModelMixin, RetrieveModelMixin, DestroyModelMixin, UpdateModelMixin
 from rest_framework.permissions import AllowAny
 from rest_framework.request import Request
 from rest_framework.response import Response
@@ -14,7 +17,7 @@ from ..parsers import SUPPORTED_PARSERS
 from ..serializers.common_serializers import FileAuditSerializer
 
 
-class FileAuditViewSet(ListModelMixin, RetrieveModelMixin, DestroyModelMixin, GenericViewSet):
+class FileAuditViewSet(ListModelMixin, RetrieveModelMixin, UpdateModelMixin, DestroyModelMixin, GenericViewSet):
     serializer_class = FileAuditSerializer
     pagination_class = DefaultPagination
 
@@ -32,6 +35,34 @@ class FileAuditViewSet(ListModelMixin, RetrieveModelMixin, DestroyModelMixin, Ge
 
     def get_serializer_context(self):
         return {'request': self.request}
+
+    def partial_update(self, request, *args, **kwargs) -> Response:
+        return Response({"detail": "Method \"PATCH\" not allowed."}, status=status.HTTP_405_METHOD_NOT_ALLOWED)
+
+    def update(self, request, *args, **kwargs) -> Response:
+        return Response({"detail": "Method \"PUT\" not allowed."}, status=status.HTTP_405_METHOD_NOT_ALLOWED)
+
+    @action(detail=True, methods=['patch'], url_path='note')
+    def add_message(self, request: Request, pk: int) -> Response:
+        """
+        Add a user message to the file audit object. The custom message is
+        stored in JSON format within the `op_add_txt` field.
+
+        :param request: The HTTP request containing the data to update the
+            `op_add_txt` field. Expected to include a `message` key in the request
+            data.
+        :param pk: The primary key of the `FileAudit` object to update.
+        :return: A Response object containing the request data after updating the
+            `FileAudit` object.
+        """
+        audit_file: FileAudit = self.get_queryset().get(pk=pk)
+        message = request.data.get('message', '')
+        op_add_txt: dict = json.loads(audit_file.op_add_txt if audit_file.op_add_txt else "{}")
+        op_add_txt['user_message'] = message
+        audit_file.op_add_txt = json.dumps(op_add_txt)
+        audit_file.save()
+
+        return Response(request.data)
 
 
 @api_view(['GET'])

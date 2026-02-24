@@ -15,8 +15,7 @@ class AccountSerializer(serializers.ModelSerializer):
         model = Account
         fields = ['id', 'name', 'acc_no', 'ifsc_code', 'acc_type', 'currency', 'min_bal', 'dis_bal', 'def_parser',
                   'def_grouper', 'act_ind']
-
-    read_only_fields = ['id']
+        read_only_fields = ['id']
 
 
 class TransactionSerializer(serializers.ModelSerializer):
@@ -24,9 +23,8 @@ class TransactionSerializer(serializers.ModelSerializer):
         model = Transaction
         fields = ['id', 'account', 'txn_date', 'txn_desc', 'grp_name', 'opr_dt', 'dbt_amount', 'cr_amount', 'ref_num',
                   'cf_amt', 'src_file']
-
-    read_only_fields = ['id', 'account', 'txn_date', 'txn_desc', 'opr_dt', 'dbt_amount', 'cr_amount', 'ref_num',
-                        'cf_amt', 'src_file']
+        read_only_fields = ['id', 'account', 'txn_date', 'txn_desc', 'opr_dt', 'dbt_amount', 'cr_amount', 'ref_num',
+                            'cf_amt', 'src_file']
 
     def to_representation(self, instance):
         representation = super().to_representation(instance)

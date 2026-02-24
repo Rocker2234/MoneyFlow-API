@@ -1,3 +1,4 @@
+import json
 from datetime import datetime
 
 from django.db import transaction
@@ -75,20 +76,28 @@ class AccountViewSet(ModelViewSet):
             return Response({'error': 'No file provided!'}, status=status.HTTP_400_BAD_REQUEST)
 
         txns = []
+        op_json = {"dt_format": dt_format, "parser": parser}
+
+        if serializer.validated_data["grouper"]:
+            op_json["grouper"] = serializer.validated_data["grouper"].name[2:-3]
+        else:
+            op_json["grouper"] = None
+
+        op_json = json.dumps(op_json)
 
         audit_log = FileAudit.objects.create(
             file_name=uploaded_file.name,
             to_id=acc.id,
             op_desc='ACC_TXN_UPLOAD',
             status='LOADING',
-            op_args=f'dt_format:{dt_format}, parser:{parser}, grouper:{serializer.validated_data["grouper"]}',
+            op_args=op_json,
             user=request.user
         )
 
         try:
             reader = get_reader(uploaded_file, parser)
-            latest_txn = Transaction.objects.filter(account=acc).order_by('-txn_date',
-                                                                          '-id').first() if is_future_only else None
+            latest_txn = Transaction.objects.filter(account=acc).order_by(
+                '-txn_date', '-id').first() if is_future_only else None
             found_match = False
 
             with transaction.atomic():
@@ -110,14 +119,14 @@ class AccountViewSet(ModelViewSet):
 
                     # If user requested validation run tests until first match
                     if latest_txn and (not found_match):
-                        if is_strict_future:    # Only insert the transactions after finding the latest uploaded transaction
+                        if is_strict_future:  # Only insert the transactions after finding the latest uploaded transaction
                             found_match = (
                                     this_txn.cf_amt == str(latest_txn.cf_amt) and
                                     this_txn.txn_date == latest_txn.txn_date and
                                     this_txn.txn_desc == latest_txn.txn_desc
                             )
                             continue
-                        elif is_future_only:    # Only insert transactions that's after the latest uploaded transaction
+                        elif is_future_only:  # Only insert transactions that's after the latest uploaded transaction
                             if this_txn.txn_date < latest_txn.txn_date:
                                 continue
                             found_match = True
@@ -127,7 +136,9 @@ class AccountViewSet(ModelViewSet):
                     audit_log.status = 'LOADED'
                     audit_log.save()
                 else:
+                    op_add_txt = {"system_message": "File did not meet conditions"}
                     audit_log.status = 'NO TXNS'
+                    audit_log.op_add_txt = json.dumps(op_add_txt)
                     audit_log.save()
 
             if len(txns) != 0:
@@ -137,10 +148,16 @@ class AccountViewSet(ModelViewSet):
                     'txns': len(txns)
                 }, status=status.HTTP_201_CREATED)
             else:
-                return Response({'message': "File did not meet conditions"}, status=status.HTTP_422_UNPROCESSABLE_ENTITY)
+                return Response({'message': "File did not meet conditions"},
+                                status=status.HTTP_422_UNPROCESSABLE_ENTITY)
+        except ValueError as e:
+            audit_log.status = 'ERROR'
+            audit_log.op_add_txt = json.dumps({'error': f"{e.__class__.__name__}: {e}"})
+            audit_log.save()
+            return Response({'error': f"{e.__class__.__name__}: {e}"}, status=status.HTTP_400_BAD_REQUEST)
         except Exception as e:
             audit_log.status = 'ERROR'
-            audit_log.op_add_txt = str(e)
+            audit_log.op_add_txt = json.dumps({'error': f"{e.__class__.__name__}: {e}"})
             audit_log.save()
             return Response({'error': f"{e.__class__.__name__}: {e}"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
@@ -229,7 +246,12 @@ class AccountViewSet(ModelViewSet):
                         updated_txns += Transaction.objects.bulk_update(batch, ['grp_name'])
                 if updated_txns > 0:
                     for audit_file in files:
-                        audit_file.op_add_txt = f"Regroup: {request.data['grouper']}"
+                        op_json: dict = json.loads(audit_file.op_add_txt if audit_file.op_add_txt else "{}")
+                        if serializer.validated_data['grouper']:
+                            op_json['regroup'] = serializer.validated_data['grouper'].name[2:-3]
+                        else:
+                            op_json['regroup'] = None
+                        audit_file.op_add_txt = json.dumps(op_json)
                         audit_file.save()
             return Response({'updated_txns': updated_txns})
         except Exception as e:
@@ -282,14 +304,14 @@ class AccountViewSet(ModelViewSet):
 class TransactionViewSet(RetrieveModelMixin, UpdateModelMixin, ListModelMixin, GenericViewSet):
     serializer_class = TransactionSerializer
     filter_backends = [DjangoFilterBackend, SearchFilter, OrderingFilter]
+    pagination_class = DefaultPagination
 
     filterset_class = AccTransactionFilter
     search_fields = ['txn_desc', 'grp_name']
     ordering_fields = ['txn_date', 'txn_desc', 'grp_name', 'opr_dt', 'dbt_amount', 'cr_amount', 'cf_amt']
 
     def get_queryset(self):
-        return Transaction.objects.filter(account__id=self.kwargs['acc_pk'],
-                                          src_file__user=self.request.user).select_related('src_file', 'account')
-
-    def destroy(self, request, *args, **kwargs):
-        return Response(status=status.HTTP_405_METHOD_NOT_ALLOWED)
+        return Transaction.objects.filter(
+            account__id=self.kwargs['acc_pk'],
+            src_file__user=self.request.user
+        ).select_related('src_file', 'account').order_by('-txn_date', 'id')

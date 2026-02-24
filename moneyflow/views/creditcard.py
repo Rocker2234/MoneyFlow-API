@@ -1,3 +1,4 @@
+import json
 from datetime import datetime
 
 from django.db import transaction
@@ -107,13 +108,21 @@ class CreditCardViewSet(ModelViewSet):
         uploaded_file = request.FILES.get('file')
 
         txns = []
+        op_json = {"dt_format": dt_format, "parser": parser}
+
+        if serializer.validated_data["grouper"]:
+            op_json["grouper"] = serializer.validated_data["grouper"].name[2:-3]
+        else:
+            op_json["grouper"] = None
+
+        op_json = json.dumps(op_json)
 
         audit_log = FileAudit.objects.create(
             file_name=uploaded_file.name,
             to_id=cc.id,
             op_desc='CC_TXN_UPLOAD',
             status='LOADING',
-            op_args=f'dt_format:{dt_format}, parser:{parser}, grouper:{serializer.validated_data["grouper"]}',
+            op_args=op_json,
             user=request.user
         )
 
@@ -140,12 +149,12 @@ class CreditCardViewSet(ModelViewSet):
             }, status=status.HTTP_201_CREATED)
         except ValueError as e:
             audit_log.status = 'ERROR'
-            audit_log.op_add_txt = str(e)
+            audit_log.op_add_txt = json.dumps({'error': f"{e.__class__.__name__}: {e}"})
             audit_log.save()
             return Response({'error': f"{e.__class__.__name__}: {e}"}, status=status.HTTP_400_BAD_REQUEST)
         except Exception as e:
             audit_log.status = 'ERROR'
-            audit_log.op_add_txt = str(e)
+            audit_log.op_add_txt = json.dumps({'error': f"{e.__class__.__name__}: {e}"})
             audit_log.save()
             return Response({'error': f"{e.__class__.__name__}: {e}"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
@@ -186,6 +195,7 @@ class CreditCardViewSet(ModelViewSet):
 class TransactionViewSet(RetrieveModelMixin, UpdateModelMixin, ListModelMixin, GenericViewSet):
     serializer_class = TransactionSerializer
     filter_backends = [DjangoFilterBackend, SearchFilter, OrderingFilter]
+    pagination_class = DefaultPagination
 
     filterset_class = CreditTransactionFilter
     search_fields = ['txn_desc', 'grp_name']
@@ -194,7 +204,4 @@ class TransactionViewSet(RetrieveModelMixin, UpdateModelMixin, ListModelMixin, G
     def get_queryset(self):
         return CreditTransaction.objects.filter(credit_card__id=self.kwargs['cc_pk'],
                                                 src_file__user=self.request.user
-                                                ).select_related('src_file', 'credit_card')
-
-    def destroy(self, request, *args, **kwargs):
-        return Response(status=status.HTTP_405_METHOD_NOT_ALLOWED)
+                                                ).select_related('src_file', 'credit_card').order_by('-txn_date', 'id')

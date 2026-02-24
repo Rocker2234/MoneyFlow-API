@@ -13,7 +13,6 @@ class CreditCardSerializer(serializers.ModelSerializer):
     class Meta:
         model = CreditCard
         fields = ['id', 'name', 'card_no', 'exp_date', 'def_parser', 'def_grouper', 'act_ind']
-
         read_only_fileds = ['id']
 
 

@@ -1,11 +1,11 @@
 meta {
-  name: Uploaded Files
+  name: File Note
   type: http
-  seq: 6
+  seq: 9
 }
 
-get {
-  url: {{baseurl}}/files/
+patch {
+  url: {{baseurl}}/files/9/note/
   body: json
   auth: bearer
 }
@@ -21,10 +21,9 @@ auth:bearer {
 }
 
 body:json {
-  // {
-  //   "op_desc": "ACC_TXN_UPLOAD",
-  //   "acc_id": 1
-  // }
+  {
+    "message": "Hey! It worked"
+  }
 }
 
 settings {
