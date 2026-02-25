@@ -38,7 +38,7 @@ class TransactionSerializer(serializers.ModelSerializer):
 
 
 class TransactionFileUploadSerializer(serializers.Serializer):
-    dt_format = serializers.CharField()
+    dt_format = serializers.CharField(allow_blank=True, default='')
     parser = serializers.CharField(max_length=20, allow_blank=True, default='')
     grouper = serializers.CharField(max_length=40, allow_blank=True, default='')
     file = serializers.FileField()
@@ -80,6 +80,9 @@ class TransactionFileUploadSerializer(serializers.Serializer):
     def validate(self, attrs):
         if (not attrs["is_future_only"]) and attrs["is_strict_future"]:
             raise serializers.ValidationError("Future Only is required when using Strict Future.")
+
+        if not attrs["dt_format"]:
+            attrs["dt_format"] = SUPPORTED_PARSERS[attrs["parser"]][1]
         return attrs
 
 

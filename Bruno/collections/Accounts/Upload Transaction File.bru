@@ -11,10 +11,10 @@ post {
 }
 
 body:multipart-form {
-  dt_format: %d/%m/%y
-  is_future_only: true
-  is_strict_future: true
   file: @file(E:\Softwares\PyCharm\MoneyFlowAPI\moneyflow\parsers\Examples\HDFC_D.txt)
+  ~is_future_only: true
+  ~is_strict_future: true
+  ~dt_format: %d/%m/%y
   ~parser: HDFC_D
   ~grouper: HDFC
 }

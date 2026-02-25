@@ -5,12 +5,13 @@ from io import BufferedReader
 
 from jinja2 import Template
 
-from .parsers import HDFC, ICICI
+from .parsers import HDFC, ICICI, KTKB
 
 PARSER_MAPPING = {
     'HDFC_D': HDFC.parse_delimited,
     "HDFC_CC_CSV": HDFC.parse_cc_csv,
-    "ICICI_XLS": ICICI.parse_xls
+    "ICICI_XLS": ICICI.parse_xls,
+    'KTKB_XLS': KTKB.parse_xls
 }
 
 
