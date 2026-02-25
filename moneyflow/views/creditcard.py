@@ -24,8 +24,9 @@ class CreditCardViewSet(ModelViewSet):
     serializer_class = CreditCardSerializer
     pagination_class = DefaultPagination
 
-    filter_backends = [CreditSearchFilter, OrderingFilter]
-    ordering_fields = ['id', 'act_ind']
+    filter_backends = [CreditSearchFilter]
+    filterset_class = CreditTransactionFilter
+    ordering_fields = ['txn_date', 'grp_name', 'amt', 'is_credit']
 
     def get_queryset(self) -> QuerySet:
         return CreditCard.objects.filter(user=self.request.user)
@@ -56,7 +57,7 @@ class CreditCardViewSet(ModelViewSet):
         :return: A paginated or complete response containing serialized transaction data matching the user's
                  query and filters.
         """
-        queryset = CreditTransaction.objects.filter(src_file__user=request.user)
+        queryset = CreditTransaction.objects.filter(src_file__user=request.user).order_by('-txn_date', '-id')
 
         search_backend = CreditSearchFilter()
         filter_backend = DjangoFilterBackend()
@@ -69,7 +70,7 @@ class CreditCardViewSet(ModelViewSet):
         if request.data.get("file_ids", None):
             queryset = queryset.filter(src_file_id__in=request.data["file_ids"])
 
-        queryset = queryset.select_related('src_file').order_by('-txn_date', '-id')
+        queryset = queryset.select_related('src_file')
         queryset = self.filter_queryset(queryset)
         page = self.paginate_queryset(queryset)
 

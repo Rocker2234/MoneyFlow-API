@@ -5,12 +5,38 @@ meta {
 }
 
 get {
-  url: {{collection_url}}/3/transactions/
+  url: {{collection_url}}/1/transactions/?search&txn_date__lte&txn_date__gte&amt__lte&amt__gte&is_credit=false&src_file__in&credit_card__in&page=1
   body: json
   auth: inherit
+}
+
+params:query {
+  search: 
+  txn_date__lte: 
+  txn_date__gte: 
+  amt__lte: 
+  amt__gte: 
+  is_credit: false
+  src_file__in: 
+  credit_card__in: 
+  page: 1
 }
 
 settings {
   encodeUrl: true
   timeout: 0
+}
+
+docs {
+  search_fields = ['txn_desc', 'grp_name']
+  
+  ordering_fields = ['txn_date', 'txn_desc', 'grp_name', 'opr_dt', 'dbt_amount', 'cr_amount', 'cf_amt']
+  
+  filter_fields = {
+              'txn_date': ['lte', 'gte'],
+              'amt': ['lte', 'gte'],
+              'is_credit': ['exact'],
+              'src_file': ['in'],
+              'credit_card': ['in'],
+          }
 }

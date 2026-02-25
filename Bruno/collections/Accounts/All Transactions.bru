@@ -5,14 +5,27 @@ meta {
 }
 
 get {
-  url: {{collection_url}}/all-txns/?page=1&search=UPI
+  url: {{collection_url}}/all-txns/?search=UPI&txn_date__lte=2025-11-19T00:00:00+05:30&txn_date__gte=2025-11-01T00:00:00+05:30&dbt_amount__lte&dbt_amount__gte&cr_amount__lte&cr_amount__gte&cf_amt__lte&cf_amt__gte&src_file__in&account__in&opr_dt__lte&opr_dt__gte&ordering=-cr_amount&page=1
   body: json
   auth: inherit
 }
 
 params:query {
-  page: 1
   search: UPI
+  txn_date__lte: 2025-11-19T00:00:00+05:30
+  txn_date__gte: 2025-11-01T00:00:00+05:30
+  dbt_amount__lte: 
+  dbt_amount__gte: 
+  cr_amount__lte: 
+  cr_amount__gte: 
+  cf_amt__lte: 
+  cf_amt__gte: 
+  src_file__in: 
+  account__in: 
+  opr_dt__lte: 
+  opr_dt__gte: 
+  ordering: -cr_amount
+  page: 1
 }
 
 body:json {
@@ -24,4 +37,20 @@ body:json {
 settings {
   encodeUrl: true
   timeout: 0
+}
+
+docs {
+  search_fields = ['txn_desc', 'grp_name']
+  
+  ordering_fields = ['txn_date', 'txn_desc', 'grp_name', 'opr_dt', 'dbt_amount', 'cr_amount', 'cf_amt']
+  
+  filter_fields = {
+              'txn_date': ['lte', 'gte'],
+              'opr_dt': ['lte', 'gte'],
+              'dbt_amount': ['lte', 'gte'],
+              'cr_amount': ['lte', 'gte'],
+              'cf_amt': ['lte', 'gte'],
+              'src_file': ['in'],
+              'account': ['in'],
+          }
 }

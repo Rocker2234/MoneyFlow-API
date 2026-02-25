@@ -24,8 +24,9 @@ class AccountViewSet(ModelViewSet):
     serializer_class = AccountSerializer
     pagination_class = DefaultPagination
 
-    filter_backends = [AccSearchFilter, OrderingFilter]
-    ordering_fields = ['id', 'act_ind', 'min_bal']
+    filter_backends = [AccSearchFilter]
+    filterset_class = AccTransactionFilter
+    ordering_fields = ['txn_date', 'txn_desc', 'grp_name', 'opr_dt', 'dbt_amount', 'cr_amount', 'cf_amt']
 
     def get_queryset(self) -> QuerySet:
         return Account.objects.filter(user=self.request.user)
@@ -174,7 +175,7 @@ class AccountViewSet(ModelViewSet):
         :return: A paginated response with serialized transaction data or a full
             response containing all matched transactions if no pagination is applied.
         """
-        queryset = Transaction.objects.filter(src_file__user=request.user)
+        queryset = Transaction.objects.filter(src_file__user=request.user).order_by('-txn_date', '-id')
 
         search_backend = AccSearchFilter()
         filter_backend = DjangoFilterBackend()
@@ -187,7 +188,7 @@ class AccountViewSet(ModelViewSet):
         if request.data.get("file_ids", None):
             queryset = queryset.filter(src_file_id__in=request.data["file_ids"])
 
-        queryset = queryset.select_related('src_file').order_by('-txn_date', '-id')
+        queryset = queryset.select_related('src_file')
         queryset = self.filter_queryset(queryset)
         page = self.paginate_queryset(queryset)
 

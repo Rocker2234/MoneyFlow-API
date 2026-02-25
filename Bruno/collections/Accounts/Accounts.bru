@@ -11,11 +11,14 @@ get {
 }
 
 params:query {
-  ~ordering: min_bal
   ~search: HDFC
 }
 
 settings {
   encodeUrl: true
   timeout: 0
+}
+
+docs {
+  search_fields = ['name', 'acc_no', 'ifsc_code']
 }

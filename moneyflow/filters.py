@@ -15,8 +15,8 @@ class CreditTransactionFilter(FilterSet):
     class Meta:
         model = CreditTransaction
         fields = {
-            'txn_date': ['lt', 'gt'],
-            'amt': ['lt', 'gt'],
+            'txn_date': ['lte', 'gte'],
+            'amt': ['lte', 'gte'],
             'is_credit': ['exact'],
             'src_file': ['in'],
             'credit_card': ['in'],
@@ -34,11 +34,11 @@ class AccTransactionFilter(FilterSet):
     class Meta:
         model = Transaction
         fields = {
-            'txn_date': ['lt', 'gt'],
-            'opr_dt': ['lt', 'gt'],
-            'dbt_amount': ['lt', 'gt'],
-            'cr_amount': ['lt', 'gt'],
-            'cf_amt': ['lt', 'gt'],
+            'txn_date': ['lte', 'gte'],
+            'opr_dt': ['lte', 'gte'],
+            'dbt_amount': ['lte', 'gte'],
+            'cr_amount': ['lte', 'gte'],
+            'cf_amt': ['lte', 'gte'],
             'src_file': ['in'],
             'account': ['in'],
         }
