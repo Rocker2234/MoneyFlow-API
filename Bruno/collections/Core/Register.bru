@@ -27,7 +27,6 @@ script:post-response {
   if (res.getStatus() === 201) {
     const data = res.getBody();
     bru.setGlobalEnvVar("jwt_access", data.access);
-    bru.setGlobalEnvVar("jwt_refresh", data.refresh);
     console.log("Access token updated successfully!");
   }
 }

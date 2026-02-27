@@ -10,12 +10,6 @@ post {
   auth: none
 }
 
-body:json {
-  {
-    "refresh": "{{jwt_refresh}}"
-  }
-}
-
 script:post-response {
   if (res.getStatus() === 200) {
     const data = res.getBody();

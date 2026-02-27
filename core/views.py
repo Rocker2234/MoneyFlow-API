@@ -1,10 +1,11 @@
-from django.contrib.auth import authenticate
+from django.conf import settings
 from rest_framework import status
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import AllowAny
 from rest_framework.request import Request
 from rest_framework.response import Response
 from rest_framework_simplejwt.tokens import RefreshToken
+from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
 
 from .serializers import UserSerializer
 
@@ -24,53 +25,72 @@ def check_conn(_request: Request) -> Response:
 @permission_classes([AllowAny])
 def register_user(request: Request) -> Response:
     """
-    Registers a new user and returns JWT authentication tokens and user details. This view
-    handles user registration by validating the provided data and creating a new user
-    if the data is valid. Upon successful registration, it returns the access and refresh
-    tokens for authentication, along with the user's serialized data.
+    Registers a new user and returns authentication tokens along with the username.
+    The access token is included in the response body, while the refresh token is
+    stored in a cookie.
 
-    :param request: An HTTP request object containing the registration data in its body.
+    :param request:
+        The HTTP request object containing the user's registration data. This should
+        include "username", "password" and "home_currency".
 
-    :return: A Response object containing the access and refresh tokens, and the user's
-        serialized data upon successful registration. The response has an HTTP status
-        code of 201 (Created).
+    :return:
+        A Django Rest Framework Response object with the following:
+            - access: The generated access token for authenticating later requests.
+            - user: The username of the newly registered user.
+        Additionally, a secure, HTTP-only cookie is set with the refresh token.
     """
     serializer = UserSerializer(data=request.data)
     serializer.is_valid(raise_exception=True)
 
     user = serializer.save()
     refresh = RefreshToken.for_user(user)
-    return Response({
+    responce = Response({
         'access': str(refresh.access_token),
-        'refresh': str(refresh),
         'user': serializer.data,
     }, status=status.HTTP_201_CREATED)
 
+    responce.set_cookie(
+        key=settings.SIMPLE_JWT['AUTH_COOKIE'],
+        value=str(refresh),
+        httponly=settings.SIMPLE_JWT['AUTH_COOKIE_HTTP_ONLY'],
+        secure=settings.SIMPLE_JWT['AUTH_COOKIE_SECURE'],
+        samesite=settings.SIMPLE_JWT['AUTH_COOKIE_SAMESITE'],
+        path=settings.SIMPLE_JWT['AUTH_COOKIE_PATH'],
+        max_age=settings.SIMPLE_JWT['REFRESH_TOKEN_LIFETIME'].total_seconds()
+    )
 
-@api_view(['POST'])
-@permission_classes([AllowAny])
-def login_user(request: Request) -> Response:
-    """
-    Authenticates a user based on provided credentials in the request data and returns
-    access and refresh tokens if successful. If the user is not found or credentials
-    are invalid, it returns an error message with Unauthorized status.
+    return responce
 
-    :param request: A Request object containing 'username' and 'password'.
 
-    :return: Response containing access token, refresh token, and username if
-             authentication is successful, otherwise an error message with HTTP
-             401 Unauthorized status.
-    """
-    username = request.data.get('username')
-    password = request.data.get('password')
+class CookieTokenObtainPairView(TokenObtainPairView):
+    def post(self, request, *args, **kwargs):
+        response = super().post(request, *args, **kwargs)
+        refresh_token = response.data.get('refresh')
 
-    user = authenticate(username=username, password=password)
-    if user is not None:
-        if user.is_active:
-            refresh = RefreshToken.for_user(user)
-            return Response({
-                'access': str(refresh.access_token),
-                'refresh': str(refresh),
-                'user': user.get_username()
-            })
-    return Response({"error": "Invalid credentials"}, status=status.HTTP_401_UNAUTHORIZED)
+        # Set the cookie
+        response.set_cookie(
+            key=settings.SIMPLE_JWT['AUTH_COOKIE'],
+            value=refresh_token,
+            httponly=settings.SIMPLE_JWT['AUTH_COOKIE_HTTP_ONLY'],
+            secure=settings.SIMPLE_JWT['AUTH_COOKIE_SECURE'],
+            samesite=settings.SIMPLE_JWT['AUTH_COOKIE_SAMESITE'],
+            path=settings.SIMPLE_JWT['AUTH_COOKIE_PATH'],
+            max_age=settings.SIMPLE_JWT['REFRESH_TOKEN_LIFETIME'].total_seconds()
+        )
+
+        # Remove the refresh token from the JSON body for security
+        response.data.pop('refresh')
+        response.data['user'] = request.data.get('username')
+
+        return response
+
+
+class CookieTokenRefreshView(TokenRefreshView):
+    def post(self, request: Request, *args, **kwargs):
+        # Extract the refresh token from the cookie
+        refresh_token = request.COOKIES.get(settings.SIMPLE_JWT['AUTH_COOKIE'])
+
+        if refresh_token:
+            request.data['refresh'] = refresh_token
+
+        return super().post(request, *args, **kwargs)

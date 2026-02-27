@@ -174,4 +174,11 @@ AUTH_USER_MODEL = 'core.User'
 SIMPLE_JWT = {
     'ACCESS_TOKEN_LIFETIME': timedelta(hours=4),
     'REFRESH_TOKEN_LIFETIME': timedelta(days=1),
+
+    # Cookie settings
+    "AUTH_COOKIE": "refresh_token",  # Name of the cookie
+    "AUTH_COOKIE_HTTP_ONLY": True,   # Prevents JS from reading the cookie
+    "AUTH_COOKIE_PATH": "/",         # Available for all paths
+    "AUTH_COOKIE_SAMESITE": "Lax",   # "Lax" or "Strict" (Lax is usually better for local dev)
+    "AUTH_COOKIE_SECURE": False,     # Set to True in production (HTTPS only)
 }

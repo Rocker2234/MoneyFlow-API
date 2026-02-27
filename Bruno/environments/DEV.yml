@@ -8,5 +8,3 @@ variables:
     value: http://{{host}}:{{port}}/moneyflow
   - secret: true
     name: jwt_access
-  - secret: true
-    name: jwt_refresh
