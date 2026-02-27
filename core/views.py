@@ -22,6 +22,24 @@ def check_conn(_request: Request) -> Response:
 
 
 @api_view(['POST'])
+def logout_user(request: Request) -> Response:
+    """
+    Handles user logout by deleting the authentication cookie and returning a success response.
+
+    :param request: The HTTP request object representing the incoming request to log out a user.
+    :return: A response object containing a success message indicating the user has been
+             successfully logged out.
+    """
+    response = Response({"message": "Successfully logged out"}, status=status.HTTP_200_OK)
+    response.delete_cookie(
+        settings.SIMPLE_JWT['AUTH_COOKIE'],
+        path=settings.SIMPLE_JWT['AUTH_COOKIE_PATH'],
+        samesite=settings.SIMPLE_JWT['AUTH_COOKIE_SAMESITE']
+    )
+    return response
+
+
+@api_view(['POST'])
 @permission_classes([AllowAny])
 def register_user(request: Request) -> Response:
     """

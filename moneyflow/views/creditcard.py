@@ -22,7 +22,7 @@ from ..serializers.creditcard_serializers import *
 
 class CreditCardViewSet(ModelViewSet):
     serializer_class = CreditCardSerializer
-    pagination_class = DefaultPagination
+    pagination_class = None
 
     filter_backends = [CreditSearchFilter]
     filterset_class = CreditTransactionFilter
@@ -72,11 +72,13 @@ class CreditCardViewSet(ModelViewSet):
 
         queryset = queryset.select_related('src_file')
         queryset = self.filter_queryset(queryset)
-        page = self.paginate_queryset(queryset)
+        paginator = DefaultPagination()
+        page = paginator.paginate_queryset(queryset, request)
+        print(page)
 
         if page is not None:
             serializer = TransactionSerializer(page, many=True)
-            return self.get_paginated_response(serializer.data)
+            return paginator.get_paginated_response(serializer.data)
 
         serializer = TransactionSerializer(queryset, many=True)
         return Response(serializer.data)

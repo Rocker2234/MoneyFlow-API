@@ -22,7 +22,6 @@ from ..serializers.account_serializers import *
 
 class AccountViewSet(ModelViewSet):
     serializer_class = AccountSerializer
-    pagination_class = DefaultPagination
 
     filter_backends = [AccSearchFilter]
     filterset_class = AccTransactionFilter
@@ -190,11 +189,12 @@ class AccountViewSet(ModelViewSet):
 
         queryset = queryset.select_related('src_file')
         queryset = self.filter_queryset(queryset)
-        page = self.paginate_queryset(queryset)
+        paginator = DefaultPagination()
+        page = paginator.paginate_queryset(queryset, request)
 
         if page is not None:
             serializer = TransactionSerializer(page, many=True)
-            return self.get_paginated_response(serializer.data)
+            return paginator.get_paginated_response(serializer.data)
 
         serializer = TransactionSerializer(queryset, many=True)
         return Response(serializer.data)
