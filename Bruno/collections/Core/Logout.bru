@@ -1,0 +1,32 @@
+meta {
+  name: Logout
+  type: http
+  seq: 10
+}
+
+post {
+  url: {{baseurl}}/logout/
+  body: json
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{jwt_access}}
+}
+
+script:post-response {
+  if (res.getStatus() === 200) {
+    const data = res.getBody();
+    
+  
+    if (data.access) {
+      bru.setGlobalEnvVar("jwt_access", data.access);
+      console.log("Access token updated successfully!");
+    }
+  }
+}
+
+settings {
+  encodeUrl: true
+  timeout: 0
+}

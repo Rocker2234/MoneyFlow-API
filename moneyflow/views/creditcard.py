@@ -74,7 +74,6 @@ class CreditCardViewSet(ModelViewSet):
         queryset = self.filter_queryset(queryset)
         paginator = DefaultPagination()
         page = paginator.paginate_queryset(queryset, request)
-        print(page)
 
         if page is not None:
             serializer = TransactionSerializer(page, many=True)

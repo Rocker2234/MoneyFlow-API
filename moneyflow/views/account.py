@@ -68,6 +68,7 @@ class AccountViewSet(ModelViewSet):
 
         dt_format = serializer.validated_data['dt_format']
         parser = serializer.validated_data['parser']
+        pw = serializer.validated_data['pw']
         is_future_only = serializer.validated_data['is_future_only']
         is_strict_future = serializer.validated_data['is_strict_future']
 
@@ -95,7 +96,7 @@ class AccountViewSet(ModelViewSet):
         )
 
         try:
-            reader = get_reader(uploaded_file, parser)
+            reader = get_reader(uploaded_file, parser, pw)
             latest_txn = Transaction.objects.filter(account=acc).order_by(
                 '-txn_date', '-id').first() if is_future_only else None
             found_match = False
@@ -126,7 +127,7 @@ class AccountViewSet(ModelViewSet):
                                     this_txn.txn_desc == latest_txn.txn_desc
                             )
                             continue
-                        elif is_future_only:  # Only insert transactions that's after the latest uploaded transaction
+                        elif is_future_only:  # Only insert transactions that are after the latest uploaded transaction
                             if this_txn.txn_date < latest_txn.txn_date:
                                 continue
                             found_match = True

@@ -13,5 +13,7 @@ djangorestframework-simplejwt = "*"
 drf-nested-routers = "*"
 django-filter = "*"
 django-cors-headers = "*"
+openpyxl = "*"
+msoffcrypto-tool = "*"
 
 [dev-packages]

@@ -42,6 +42,7 @@ class TransactionFileUploadSerializer(serializers.Serializer):
     parser = serializers.CharField(max_length=20, allow_blank=True, default='')
     grouper = serializers.CharField(max_length=40, allow_blank=True, default='')
     file = serializers.FileField()
+    pw = serializers.CharField(allow_blank=True, default='')
     is_future_only = serializers.BooleanField(allow_null=True, default=False)
     is_strict_future = serializers.BooleanField(allow_null=True, default=False)
 
@@ -71,8 +72,12 @@ class TransactionFileUploadSerializer(serializers.Serializer):
         if value in ("NULL", "", None):
             raise serializers.ValidationError("File is required!")
 
-        allowed_mime_types = ["text/plain", "application/vnd.ms-excel"]
+        allowed_mime_types = [
+            "text/plain",
+            "application/vnd.ms-excel",
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"]
         if value.content_type not in allowed_mime_types:
+            print("Got bad file mime:", value.content_type)
             raise serializers.ValidationError("Invalid File")
 
         return value
@@ -83,6 +88,11 @@ class TransactionFileUploadSerializer(serializers.Serializer):
 
         if not attrs["dt_format"]:
             attrs["dt_format"] = SUPPORTED_PARSERS[attrs["parser"]][1]
+
+        if SUPPORTED_PARSERS[attrs["parser"]][2] and (not attrs["pw"]):
+            raise serializers.ValidationError("Password is required for this parser.")
+        elif (not SUPPORTED_PARSERS[attrs["parser"]][2]) and attrs["pw"]:
+            attrs["pw"] = None
         return attrs
 
 
