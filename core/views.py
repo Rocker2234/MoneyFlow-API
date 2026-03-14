@@ -1,3 +1,7 @@
+import os.path
+import sys
+import threading
+
 from django.conf import settings
 from rest_framework import status
 from rest_framework.decorators import api_view, permission_classes
@@ -7,7 +11,18 @@ from rest_framework.response import Response
 from rest_framework_simplejwt.tokens import RefreshToken
 from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
 
-from .serializers import UserSerializer
+from .models import User
+from .serializers import UserSerializer, ChangePasswordSerializer, ResetPasswordSerializer
+
+
+def del_reset_file(user):
+    reset_file = os.path.join(settings.CONFIG_PATH, (user + '_reset.txt'))
+    try:
+        if os.path.exists(reset_file):
+            os.remove(reset_file)
+    except Exception as e:
+        print("There was an error deleting the reset file:", file=sys.stderr)
+        print(e, file=sys.stderr)
 
 
 @api_view(['GET', 'POST'])
@@ -78,6 +93,80 @@ def register_user(request: Request) -> Response:
     )
 
     return responce
+
+
+@api_view(['POST'])
+def change_pw(request: Request) -> Response:
+    serializer = ChangePasswordSerializer(data=request.data, context={'request': request})
+    serializer.is_valid(raise_exception=True)
+
+    user = request.user
+    user.set_password(serializer.validated_data['new_password'])
+    user.save()
+
+    response = Response(
+        {"message": "Password updated successfully. Please login again."},
+        status=status.HTTP_200_OK
+    )
+
+    response.delete_cookie(
+        settings.SIMPLE_JWT['AUTH_COOKIE'],
+        path=settings.SIMPLE_JWT['AUTH_COOKIE_PATH'],
+        samesite=settings.SIMPLE_JWT['AUTH_COOKIE_SAMESITE']
+    )
+
+    return response
+
+
+@api_view(['POST'])
+def reset_pw_file_create(request: Request) -> Response:
+    serializer = ResetPasswordSerializer(data=request.data)
+    serializer.is_valid(raise_exception=True)
+    reset_file = os.path.join(settings.CONFIG_PATH, (serializer.validated_data['user'] + '_reset.txt'))
+
+    open(reset_file, 'w')
+
+    response = Response(
+        {
+            "message": "File created successfully. Please check your config folder.",
+            "user": request.data['user'],
+            "path": reset_file
+        },
+        status=status.HTTP_200_OK
+    )
+
+    t = threading.Timer(int(settings.USER_SETTINGS.get("Main", 'pw_reset_file_timeout')), del_reset_file,
+                        (serializer.validated_data['user'],))
+    t.daemon = True
+    t.start()
+
+    return response
+
+
+@api_view(['POST'])
+def reset_pw(request: Request) -> Response:
+    serializer = ResetPasswordSerializer(data=request.data)
+    serializer.is_valid(raise_exception=True)
+    reset_file = os.path.join(settings.CONFIG_PATH, (serializer.validated_data['user'] + '_reset.txt'))
+
+    try:
+        with open(reset_file, 'r') as f:
+            pw = f.readline().strip()
+        if not pw:
+            return Response({"message": "Please enter new password on the file!"}, status=status.HTTP_400_BAD_REQUEST)
+        os.remove(reset_file)
+    except FileNotFoundError:
+        return Response({"message": "There was no request made to reset password for this user."},
+                        status=status.HTTP_400_BAD_REQUEST)
+
+    user = User.objects.get(username=serializer.validated_data['user'])
+    user.set_password(pw)
+    user.save()
+
+    return Response(
+        {"message": "Password updated successfully."},
+        status=status.HTTP_200_OK
+    )
 
 
 class CookieTokenObtainPairView(TokenObtainPairView):

@@ -14,6 +14,7 @@ def default_config(config_path: Path) -> ConfigParser:
     def_conf["Main"] = {
         "home_tz": "UTC",
         "templates": os.path.join(config_path, "templates"),
+        "pw_reset_file_timeout": "600"
     }
     def_conf["DB"] = {
         "engine": 'sqlite',
